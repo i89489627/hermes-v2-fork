@@ -1,0 +1,17 @@
+{
+  "_meta": {
+    "created_at": "2026-11-21T02:57:17Z",
+    "release_tag": "v2.1-r7",
+    "platform_note": "Windows 10.0.26300 x64, CPython 3.13 (.venv), repository-local run on the development host",
+    "method": "measure_current() in tests/benchmark/test_regression.py: deterministic fakes (instant extractor/gate models — the LLM is never called live), 200-entry corpus written straight onto the store's on-disk layout (git commits skipped), per op 3 batches of 1 warm-up + 30 timed calls, batch p50 = median of the per-call milliseconds, op value = BEST batch p50 (min of 3 — the P4.T1 benchmark's best-of-three noise-absorption pattern), rounded UP to 0.1ms so the stored reference never understates the measured cost",
+    "ci_baseline_policy": "CI refreshes this file per release tag: re-run measure_current() on the release runner and commit the result alongside the tag, so a release always compares against its predecessor's host-equivalent numbers. PR CI runs the five tests in test_regression.py and fails on any violation.",
+    "tolerance": "regression = current_ms_p50 > baseline_ms_p50 + allowance; allowance = baseline * 10% (plan P20.T4: regression >10% fails CI), floored at 2.0ms absolute when the baseline is below 5.0ms — sub-5ms ops sit where Windows timer and thread-scheduling jitter exceeds any percentage, and a real regression there is a >=2ms p50 shift (floor kept deliberately generous, documented in the test module docstring)",
+    "trend_report": "Weekly aggregation design: a weekly CI job re-runs measure_current() on the pinned runner and appends {week: <ISO week>, release_tag, p50s} to tests/benchmark/trend.jsonl, published as a CI artifact. Each snapshot is comparable against the previous week (immediate drift), the release-tag baseline in this file (release drift), and the full JSONL history stays queryable without extra infrastructure. No code this task (P20.T4 files_to_create is the harness + this file); the weekly job lands with the CI workflow work."
+  },
+  "baselines": {
+    "extraction_ms_p50": 0.1,
+    "gating_ms_p50": 0.4,
+    "retrieval_ms_p50": 0.8,
+    "injection_ms_p50": 1.3
+  }
+}

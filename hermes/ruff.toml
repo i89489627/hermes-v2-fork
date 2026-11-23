@@ -1,0 +1,14 @@
+# hermes-v2 lint config (plan P0.T2; cutover adaptation D5).
+# Originally a root ruff.toml; upstream now ships its own root ruff.toml
+# (line-length 88, their rule set), so the v2 config lives INSIDE the v2
+# package and is applied explicitly: `ruff check hermes/ --config hermes/ruff.toml`
+# (v2 ci.yml + .pre-commit-config.yaml). Upstream `ruff check .` excludes
+# hermes/ via the root config's lint.exclude.
+src = ["hermes"]
+line-length = 100
+
+[lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM"]
+
+[lint.isort]
+known-first-party = ["hermes"]

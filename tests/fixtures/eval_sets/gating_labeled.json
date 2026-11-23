@@ -1,0 +1,1863 @@
+{
+  "_meta": {
+    "component": "gating",
+    "version": "1.0.0",
+    "created_at": "2026-11-20",
+    "description": "P10.T2 eval set: a turn plus retrieved memory candidates labeled with the CBDC gate decision per candidate (use = inject into the prompt, verify = relevant but untrusted/stale/contradicted and needs a verification step, ignore = not worth the budget). expected_output.budget accounts only for use decisions under the pipeline defaults (budget_claims=3, budget_chars=1200): claims_used counts use decisions, chars_used sums the character length of used candidates' text fields."
+  },
+  "examples": [
+    {
+      "id": "gate-001",
+      "input": {
+        "turn": "What should I put in my coffee these days?",
+        "candidates": [
+          {
+            "id": "pref-coffee-oat-milk",
+            "text": "User prefers oat milk in coffee",
+            "trust": 0.92,
+            "age_days": 5
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "pref-coffee-oat-milk",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 31
+        }
+      },
+      "context": "fresh, trusted, directly answers the turn"
+    },
+    {
+      "id": "gate-002",
+      "input": {
+        "turn": "Any airline deals I should grab for March?",
+        "candidates": [
+          {
+            "id": "pref-avoid-delta",
+            "text": "User refuses to fly Delta",
+            "trust": 0.95,
+            "age_days": 60
+          },
+          {
+            "id": "pref-window-seat",
+            "text": "User prefers window seats",
+            "trust": 0.9,
+            "age_days": 120
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "pref-avoid-delta",
+            "action": "use"
+          },
+          {
+            "id": "pref-window-seat",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 25
+        }
+      },
+      "context": "one on-topic candidate; seat preference does not bear on deals"
+    },
+    {
+      "id": "gate-003",
+      "input": {
+        "turn": "Order me a coffee while you're at it.",
+        "candidates": [
+          {
+            "id": "pref-coffee-oat-milk",
+            "text": "User prefers oat milk in coffee",
+            "trust": 0.9,
+            "age_days": 420
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "pref-coffee-oat-milk",
+            "action": "verify"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "relevant but very stale preference; gate flags for verification"
+    },
+    {
+      "id": "gate-004",
+      "input": {
+        "turn": "What's the weather this weekend?",
+        "candidates": [
+          {
+            "id": "pref-coffee-oat-milk",
+            "text": "User prefers oat milk in coffee",
+            "trust": 0.95,
+            "age_days": 2
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "pref-coffee-oat-milk",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "high trust but topically irrelevant; retrieval noise"
+    },
+    {
+      "id": "gate-005",
+      "input": {
+        "turn": "Plan my dinners for this week.",
+        "candidates": [
+          {
+            "id": "health-low-sodium-diet",
+            "text": "User follows a low-sodium diet advised by a cardiologist",
+            "trust": 0.97,
+            "age_days": 30
+          },
+          {
+            "id": "pref-no-cilantro",
+            "text": "User wants cilantro excluded from recipes",
+            "trust": 0.93,
+            "age_days": 45
+          },
+          {
+            "id": "pref-coffee-oat-milk",
+            "text": "User prefers oat milk in coffee",
+            "trust": 0.9,
+            "age_days": 10
+          },
+          {
+            "id": "family-mia-piano",
+            "text": "Mia takes piano lessons with Mr. Rossi on Saturdays",
+            "trust": 0.95,
+            "age_days": 20
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "health-low-sodium-diet",
+            "action": "use"
+          },
+          {
+            "id": "pref-no-cilantro",
+            "action": "use"
+          },
+          {
+            "id": "pref-coffee-oat-milk",
+            "action": "ignore"
+          },
+          {
+            "id": "family-mia-piano",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 2,
+          "chars_used": 97
+        }
+      },
+      "context": "two binding dietary constraints used; the rest is out of scope"
+    },
+    {
+      "id": "gate-006",
+      "input": {
+        "turn": "I've gone back to whole milk lately, by the way.",
+        "candidates": [
+          {
+            "id": "pref-coffee-oat-milk",
+            "text": "User prefers oat milk in coffee",
+            "trust": 0.9,
+            "age_days": 15
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "pref-coffee-oat-milk",
+            "action": "verify"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "turn contradicts the stored entry; inject nothing before review"
+    },
+    {
+      "id": "gate-007",
+      "input": {
+        "turn": "I only drink oat milk in coffee now.",
+        "candidates": [
+          {
+            "id": "pref-coffee-oat-milk",
+            "text": "User prefers oat milk in coffee",
+            "trust": 0.95,
+            "age_days": 3
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "pref-coffee-oat-milk",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "the turn already states the fact; injection adds nothing"
+    },
+    {
+      "id": "gate-008",
+      "input": {
+        "turn": "What medications am I on?",
+        "candidates": [
+          {
+            "id": "health-migraine-propranolol",
+            "text": "User takes propranolol for migraine prevention",
+            "trust": 0.96,
+            "age_days": 25
+          },
+          {
+            "id": "tech-work-laptop",
+            "text": "User's work laptop is a ThinkPad X1 Carbon",
+            "trust": 0.98,
+            "age_days": 90
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "health-migraine-propranolol",
+            "action": "use"
+          },
+          {
+            "id": "tech-work-laptop",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 46
+        }
+      },
+      "context": "relevance beats raw trust score"
+    },
+    {
+      "id": "gate-009",
+      "input": {
+        "turn": "Remind me who manages my passwords.",
+        "candidates": [
+          {
+            "id": "tech-password-manager",
+            "text": "User manages passwords with Bitwarden",
+            "trust": 0.4,
+            "age_days": 7
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "tech-password-manager",
+            "action": "verify"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "low trust score despite freshness; unverified source"
+    },
+    {
+      "id": "gate-010",
+      "input": {
+        "turn": "Draft the birthday message for my sister.",
+        "candidates": [
+          {
+            "id": "family-priya-birthday",
+            "text": "Priya's birthday is March 14",
+            "trust": 0.93,
+            "age_days": 200
+          },
+          {
+            "id": "pref-bullet-summaries",
+            "text": "User prefers summary bullet lists over long paragraphs",
+            "trust": 0.94,
+            "age_days": 100
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "family-priya-birthday",
+            "action": "use"
+          },
+          {
+            "id": "pref-bullet-summaries",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 28
+        }
+      },
+      "context": "date fact is the payload; style pref is stale guidance for drafts"
+    },
+    {
+      "id": "gate-011",
+      "input": {
+        "turn": "What time do I pick the kids up?",
+        "candidates": [
+          {
+            "id": "family-school-pickup",
+            "text": "School pickup time is 3:15pm",
+            "trust": 0.91,
+            "age_days": 4
+          },
+          {
+            "id": "family-school-pickup-old",
+            "text": "School pickup time is 2:45pm",
+            "trust": 0.6,
+            "age_days": 180
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "family-school-pickup",
+            "action": "use"
+          },
+          {
+            "id": "family-school-pickup-old",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 28
+        }
+      },
+      "context": "near-duplicate candidates; only the fresh high-trust one is used"
+    },
+    {
+      "id": "gate-012",
+      "input": {
+        "turn": "Am I free early Thursday for a call?",
+        "candidates": [
+          {
+            "id": "health-physio-thursday",
+            "text": "User has physiotherapy at 7am on Thursdays",
+            "trust": 0.92,
+            "age_days": 35
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "health-physio-thursday",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 42
+        }
+      },
+      "context": "conflict-relevant commitment, fresh enough to trust"
+    },
+    {
+      "id": "gate-013",
+      "input": {
+        "turn": "How much do I still owe Marcus?",
+        "candidates": [
+          {
+            "id": "finance-loan-to-marcus",
+            "text": "User lent Marcus 200 EUR on October 12",
+            "trust": 0.55,
+            "age_days": 39
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "finance-loan-to-marcus",
+            "action": "verify"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "money fact recorded informally; repayments may have happened"
+    },
+    {
+      "id": "gate-014",
+      "input": {
+        "turn": "What's for dinner, any suggestions?",
+        "candidates": []
+      },
+      "expected_output": {
+        "decisions": [],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "retrieval returned nothing; gate has no candidates to act on"
+    },
+    {
+      "id": "gate-015",
+      "input": {
+        "turn": "Book the dentist for next month.",
+        "candidates": [
+          {
+            "id": "health-dental-cleaning",
+            "text": "User's last dental cleaning was September 9 at Bright Smile Clinic",
+            "trust": 0.9,
+            "age_days": 70
+          },
+          {
+            "id": "health-dentist-clinic-pref",
+            "text": "User prefers appointments at Bright Smile Clinic",
+            "trust": 0.88,
+            "age_days": 70
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "health-dental-cleaning",
+            "action": "use"
+          },
+          {
+            "id": "health-dentist-clinic-pref",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 66
+        }
+      },
+      "context": "last-visit date informs booking; the redundant clinic pref is dropped"
+    },
+    {
+      "id": "gate-016",
+      "input": {
+        "turn": "When do the bins go out?",
+        "candidates": [
+          {
+            "id": "home-bins-tuesday",
+            "text": "Household waste bins are collected on Tuesday mornings",
+            "trust": 0.85,
+            "age_days": 12
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "home-bins-tuesday",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 54
+        }
+      },
+      "context": "moderate trust household routine, directly answers"
+    },
+    {
+      "id": "gate-017",
+      "input": {
+        "turn": "Write my out-of-office for next week.",
+        "candidates": [
+          {
+            "id": "travel-lisbon-may",
+            "text": "User travels to Lisbon arriving May 3 and returns May 10",
+            "trust": 0.7,
+            "age_days": 15
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "travel-lisbon-may",
+            "action": "verify"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "an OOO draft hinges on travel dates the entry only partially covers"
+    },
+    {
+      "id": "gate-018",
+      "input": {
+        "turn": "Which laptop should I take to the conference?",
+        "candidates": [
+          {
+            "id": "tech-work-laptop",
+            "text": "User's work laptop is a ThinkPad X1 Carbon",
+            "trust": 0.98,
+            "age_days": 40
+          },
+          {
+            "id": "tech-desktop-side-projects",
+            "text": "User uses a desktop machine for side projects",
+            "trust": 0.95,
+            "age_days": 60
+          },
+          {
+            "id": "career-senior-engineer",
+            "text": "User was promoted to senior engineer effective December 1",
+            "trust": 0.99,
+            "age_days": 9
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "tech-work-laptop",
+            "action": "use"
+          },
+          {
+            "id": "tech-desktop-side-projects",
+            "action": "ignore"
+          },
+          {
+            "id": "career-senior-engineer",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 42
+        }
+      },
+      "context": "only the portable machine is decision-relevant"
+    },
+    {
+      "id": "gate-019",
+      "input": {
+        "turn": "Set an alarm the night before my niece's flight lands.",
+        "candidates": [
+          {
+            "id": "family-niece-arrival",
+            "text": "User's niece lands on December 2 at 9:40pm",
+            "trust": 0.45,
+            "age_days": 90
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "family-niece-arrival",
+            "action": "verify"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "scheduling an alarm off a low-trust date would be harmful"
+    },
+    {
+      "id": "gate-020",
+      "input": {
+        "turn": "Help me reply to Elena about the budget.",
+        "candidates": [
+          {
+            "id": "work-budget-approved-vector-search",
+            "text": "Elena approved the budget for the vector search migration",
+            "trust": 0.94,
+            "age_days": 8
+          },
+          {
+            "id": "work-manager-elena",
+            "text": "User's manager is named Elena",
+            "trust": 0.96,
+            "age_days": 200
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "work-budget-approved-vector-search",
+            "action": "use"
+          },
+          {
+            "id": "work-manager-elena",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 57
+        }
+      },
+      "context": "the decision fact matters; naming the manager is already in the thread"
+    },
+    {
+      "id": "gate-021",
+      "input": {
+        "turn": "What's the plan for mom's birthday dinner?",
+        "candidates": [
+          {
+            "id": "family-mom-60th-party",
+            "text": "Family party for mom's 60th birthday is planned for February 8",
+            "trust": 0.9,
+            "age_days": 6
+          },
+          {
+            "id": "family-mom-60th-venue",
+            "text": "The 60th birthday dinner venue is Trattoria Nonna",
+            "trust": 0.9,
+            "age_days": 6
+          },
+          {
+            "id": "family-mom-60th-gift-old",
+            "text": "The gift shortlist for mom's 60th had three options",
+            "trust": 0.3,
+            "age_days": 45
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "family-mom-60th-party",
+            "action": "use"
+          },
+          {
+            "id": "family-mom-60th-venue",
+            "action": "use"
+          },
+          {
+            "id": "family-mom-60th-gift-old",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 2,
+          "chars_used": 111
+        }
+      },
+      "context": "date and venue are current; the stale gift note is abandoned"
+    },
+    {
+      "id": "gate-022",
+      "input": {
+        "turn": "Should I bring the skis?",
+        "candidates": [
+          {
+            "id": "travel-trip-ski-trip",
+            "text": "The February trip is a ski week in Innsbruck",
+            "trust": 0.93,
+            "age_days": 20
+          },
+          {
+            "id": "travel-lisbon-may",
+            "text": "User travels to Lisbon arriving May 3 and returns May 10",
+            "trust": 0.95,
+            "age_days": 20
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "travel-trip-ski-trip",
+            "action": "use"
+          },
+          {
+            "id": "travel-lisbon-may",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 44
+        }
+      },
+      "context": "higher-trust candidate is the wrong trip; relevance wins"
+    },
+    {
+      "id": "gate-023",
+      "input": {
+        "turn": "Add a reminder for the passport renewal.",
+        "candidates": [
+          {
+            "id": "docs-passport-expiry",
+            "text": "User's passport expires June 2027",
+            "trust": 0.97,
+            "age_days": 30
+          },
+          {
+            "id": "docs-passport-renewal-preference",
+            "text": "User wants a renewal reminder around December 2026",
+            "trust": 0.97,
+            "age_days": 30
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "docs-passport-expiry",
+            "action": "ignore"
+          },
+          {
+            "id": "docs-passport-renewal-preference",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 50
+        }
+      },
+      "context": "the reminder preference is the actionable entry, not the raw expiry"
+    },
+    {
+      "id": "gate-024",
+      "input": {
+        "turn": "What do I need installed to run the side project locally?",
+        "candidates": [
+          {
+            "id": "tech-dev-env-vars",
+            "text": "The side-project stack needs DATABASE_URL and REDIS_URL set",
+            "trust": 0.89,
+            "age_days": 50
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "tech-dev-env-vars",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 59
+        }
+      },
+      "context": "setup note directly answers the setup question"
+    },
+    {
+      "id": "gate-025",
+      "input": {
+        "turn": "Am I allowed to eat before the scan?",
+        "candidates": [
+          {
+            "id": "health-scan-prep-instructions",
+            "text": "User must fast four hours before the December CT scan",
+            "trust": 0.91,
+            "age_days": 3
+          },
+          {
+            "id": "health-blood-type",
+            "text": "User's blood type is O negative",
+            "trust": 0.99,
+            "age_days": 400
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "health-scan-prep-instructions",
+            "action": "use"
+          },
+          {
+            "id": "health-blood-type",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 53
+        }
+      },
+      "context": "prep instructions answer; blood type is medical but irrelevant here"
+    },
+    {
+      "id": "gate-026",
+      "input": {
+        "turn": "Which task should I start with today?",
+        "candidates": [
+          {
+            "id": "work-client-deadline-nov30",
+            "text": "User's client deadline is November 30",
+            "trust": 0.95,
+            "age_days": 2
+          },
+          {
+            "id": "work-sprint-review-schedule",
+            "text": "User's sprint review is on Wednesdays",
+            "trust": 0.9,
+            "age_days": 30
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "work-client-deadline-nov30",
+            "action": "use"
+          },
+          {
+            "id": "work-sprint-review-schedule",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 2,
+          "chars_used": 74
+        }
+      },
+      "context": "both deadline and cadence inform prioritization"
+    },
+    {
+      "id": "gate-027",
+      "input": {
+        "turn": "Where should we celebrate the promotion?",
+        "candidates": [
+          {
+            "id": "place-tsukiji-sushi",
+            "text": "User regularly dines at Tsukiji Sushi",
+            "trust": 0.9,
+            "age_days": 100
+          },
+          {
+            "id": "place-bakery-ninth-closed",
+            "text": "The bakery on Ninth Street has closed permanently",
+            "trust": 0.95,
+            "age_days": 5
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "place-tsukiji-sushi",
+            "action": "verify"
+          },
+          {
+            "id": "place-bakery-ninth-closed",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "stale dining entry may be outdated for a suggestion; closure notice is moot"
+    },
+    {
+      "id": "gate-028",
+      "input": {
+        "turn": "Did I already send the invoice reminders this month?",
+        "candidates": [
+          {
+            "id": "finance-invoice-reminders",
+            "text": "Invoice reminders go to accounting@fernworks.io monthly on the first",
+            "trust": 0.93,
+            "age_days": 25
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "finance-invoice-reminders",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "routine note cannot answer a state question about this month"
+    },
+    {
+      "id": "gate-029",
+      "input": {
+        "turn": "What was the postmortem finding again?",
+        "candidates": [
+          {
+            "id": "ops-outage-tls-edge2",
+            "text": "The outage root cause was an expired TLS certificate on edge-2",
+            "trust": 0.97,
+            "age_days": 11
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "ops-outage-tls-edge2",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 62
+        }
+      },
+      "context": "recent incident record, exact match for the question"
+    },
+    {
+      "id": "gate-030",
+      "input": {
+        "turn": "Schedule the follow-up with the cardiologist.",
+        "candidates": [
+          {
+            "id": "health-cardiologist-followup",
+            "text": "Cardiology follow-up should be booked six weeks after the last visit",
+            "trust": 0.6,
+            "age_days": 60
+          },
+          {
+            "id": "health-low-sodium-diet",
+            "text": "User follows a low-sodium diet advised by a cardiologist",
+            "trust": 0.97,
+            "age_days": 30
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "health-cardiologist-followup",
+            "action": "verify"
+          },
+          {
+            "id": "health-low-sodium-diet",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "booking rule is unverified; the diet entry does not help booking"
+    },
+    {
+      "id": "gate-031",
+      "input": {
+        "turn": "What do I call you in emails - Alex or Alexandra?",
+        "candidates": [
+          {
+            "id": "pref-called-alex",
+            "text": "User prefers the name Alex",
+            "trust": 0.99,
+            "age_days": 1
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "pref-called-alex",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "corrected one turn ago; restating it adds nothing"
+    },
+    {
+      "id": "gate-032",
+      "input": {
+        "turn": "Help me plan groceries for the week.",
+        "candidates": [
+          {
+            "id": "health-low-sodium-diet",
+            "text": "User follows a low-sodium diet advised by a cardiologist",
+            "trust": 0.97,
+            "age_days": 30
+          },
+          {
+            "id": "pref-no-cilantro",
+            "text": "User wants cilantro excluded from recipes",
+            "trust": 0.93,
+            "age_days": 45
+          },
+          {
+            "id": "pref-dislikes-cilantro-flavor",
+            "text": "User thinks cilantro tastes like soap",
+            "trust": 0.93,
+            "age_days": 45
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "health-low-sodium-diet",
+            "action": "use"
+          },
+          {
+            "id": "pref-no-cilantro",
+            "action": "use"
+          },
+          {
+            "id": "pref-dislikes-cilantro-flavor",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 2,
+          "chars_used": 97
+        }
+      },
+      "context": "second cilantro entry is a redundant restatement of the first"
+    },
+    {
+      "id": "gate-033",
+      "input": {
+        "turn": "How long is my commute to the new office?",
+        "candidates": [
+          {
+            "id": "home-office-commute",
+            "text": "User's commute to the new office is about 35 minutes by train",
+            "trust": 0.75,
+            "age_days": 14
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "home-office-commute",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 61
+        }
+      },
+      "context": "recently recorded route estimate"
+    },
+    {
+      "id": "gate-034",
+      "input": {
+        "turn": "Do I have anything scheduled on my birthday?",
+        "candidates": [
+          {
+            "id": "family-user-birthday",
+            "text": "User's birthday is August 21",
+            "trust": 0.99,
+            "age_days": 300
+          },
+          {
+            "id": "family-mom-60th-party",
+            "text": "Family party for mom's 60th birthday is planned for February 8",
+            "trust": 0.9,
+            "age_days": 6
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "family-user-birthday",
+            "action": "use"
+          },
+          {
+            "id": "family-mom-60th-party",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 28
+        }
+      },
+      "context": "own birthday is the anchor; mom's party is a different date"
+    },
+    {
+      "id": "gate-035",
+      "input": {
+        "turn": "Write a todo list for moving the blog.",
+        "candidates": [
+          {
+            "id": "tech-blog-astro",
+            "text": "User's blog runs on Astro",
+            "trust": 0.92,
+            "age_days": 90
+          },
+          {
+            "id": "tech-blog-wordpress-archive",
+            "text": "User's previous blog used WordPress and is archived",
+            "trust": 0.92,
+            "age_days": 90
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "tech-blog-astro",
+            "action": "use"
+          },
+          {
+            "id": "tech-blog-wordpress-archive",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 25
+        }
+      },
+      "context": "the move is done; only the current stack is actionable"
+    },
+    {
+      "id": "gate-036",
+      "input": {
+        "turn": "What movies should we watch with the kids?",
+        "candidates": [
+          {
+            "id": "family-kids-ages",
+            "text": "User's children are 6 and 9 years old",
+            "trust": 0.9,
+            "age_days": 60
+          },
+          {
+            "id": "family-riverside-elementary",
+            "text": "User's children attend Riverside Elementary",
+            "trust": 0.95,
+            "age_days": 30
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "family-kids-ages",
+            "action": "use"
+          },
+          {
+            "id": "family-riverside-elementary",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 37
+        }
+      },
+      "context": "ages drive age-appropriate picks; school name does not"
+    },
+    {
+      "id": "gate-037",
+      "input": {
+        "turn": "Can I park at the new office for free?",
+        "candidates": [
+          {
+            "id": "home-office-parking",
+            "text": "The new office garage is free for badge holders after 6pm",
+            "trust": 0.5,
+            "age_days": 5
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "home-office-parking",
+            "action": "verify"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "policy detail from an unverified source"
+    },
+    {
+      "id": "gate-038",
+      "input": {
+        "turn": "Remind me what I decided about the logo.",
+        "candidates": [
+          {
+            "id": "work-logo-decision-blue",
+            "text": "The launch logo is blue",
+            "trust": 0.96,
+            "age_days": 7
+          },
+          {
+            "id": "work-logo-vote-tally",
+            "text": "The amber logo lost the team vote 4 to 2",
+            "trust": 0.96,
+            "age_days": 7
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "work-logo-decision-blue",
+            "action": "use"
+          },
+          {
+            "id": "work-logo-vote-tally",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 23
+        }
+      },
+      "context": "the decision answers; the vote detail is color commentary"
+    },
+    {
+      "id": "gate-039",
+      "input": {
+        "turn": "I need to cancel something before the 15th, what was it?",
+        "candidates": [
+          {
+            "id": "finance-northwind-renewal",
+            "text": "Northwind contract must be cancelled by January 15 to stop renewal",
+            "trust": 0.95,
+            "age_days": 40
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "finance-northwind-renewal",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 66
+        }
+      },
+      "context": "deadline entry is exactly the missed detail"
+    },
+    {
+      "id": "gate-040",
+      "input": {
+        "turn": "What should I wear to the interview?",
+        "candidates": [
+          {
+            "id": "career-interview-panel",
+            "text": "The interview panel includes the VP of Engineering",
+            "trust": 0.85,
+            "age_days": 3
+          },
+          {
+            "id": "pref-casual-dress",
+            "text": "User usually wears business casual for interviews",
+            "trust": 0.88,
+            "age_days": 200
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "career-interview-panel",
+            "action": "ignore"
+          },
+          {
+            "id": "pref-casual-dress",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 49
+        }
+      },
+      "context": "dress habit is on-topic; panel composition is not"
+    },
+    {
+      "id": "gate-041",
+      "input": {
+        "turn": "When is garbage day and when is recycling?",
+        "candidates": [
+          {
+            "id": "home-bins-tuesday",
+            "text": "Household waste bins are collected on Tuesday mornings",
+            "trust": 0.85,
+            "age_days": 12
+          },
+          {
+            "id": "home-recycling-friday",
+            "text": "Recycling is collected on Friday mornings",
+            "trust": 0.85,
+            "age_days": 12
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "home-bins-tuesday",
+            "action": "use"
+          },
+          {
+            "id": "home-recycling-friday",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 2,
+          "chars_used": 95
+        }
+      },
+      "context": "two complementary schedule entries, both needed"
+    },
+    {
+      "id": "gate-042",
+      "input": {
+        "turn": "Draft a tweet about the launch.",
+        "candidates": [
+          {
+            "id": "work-launch-date-march",
+            "text": "The product launch is scheduled for March 4",
+            "trust": 0.9,
+            "age_days": 10
+          },
+          {
+            "id": "pref-social-tone-witty",
+            "text": "User likes a witty tone on social media",
+            "trust": 0.9,
+            "age_days": 150
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "work-launch-date-march",
+            "action": "use"
+          },
+          {
+            "id": "pref-social-tone-witty",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 2,
+          "chars_used": 82
+        }
+      },
+      "context": "fact and tone both shape the draft"
+    },
+    {
+      "id": "gate-043",
+      "input": {
+        "turn": "How much did I say the rent increase was?",
+        "candidates": [
+          {
+            "id": "home-rent-1450",
+            "text": "User's rent is 1450 per month starting January",
+            "trust": 0.92,
+            "age_days": 20
+          },
+          {
+            "id": "home-rent-old-1300",
+            "text": "User's rent was 1300 per month before January",
+            "trust": 0.92,
+            "age_days": 60
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "home-rent-1450",
+            "action": "use"
+          },
+          {
+            "id": "home-rent-old-1300",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 46
+        }
+      },
+      "context": "the increase amount follows from the new figure; old figure optional"
+    },
+    {
+      "id": "gate-044",
+      "input": {
+        "turn": "What time is my dentist appointment tomorrow?",
+        "candidates": [
+          {
+            "id": "health-dentist-appointment",
+            "text": "Dental appointment tomorrow at 10:30am at Bright Smile Clinic",
+            "trust": 0.7,
+            "age_days": 0
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "health-dentist-appointment",
+            "action": "verify"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "same-day schedule entry captured verbally; confirm before asserting"
+    },
+    {
+      "id": "gate-045",
+      "input": {
+        "turn": "Which piano book should Mia use next?",
+        "candidates": [
+          {
+            "id": "family-mia-piano",
+            "text": "Mia takes piano lessons with Mr. Rossi on Saturdays",
+            "trust": 0.95,
+            "age_days": 30
+          },
+          {
+            "id": "family-mia-piano-level",
+            "text": "Mia finished the level 2 piano book in October",
+            "trust": 0.9,
+            "age_days": 35
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "family-mia-piano",
+            "action": "ignore"
+          },
+          {
+            "id": "family-mia-piano-level",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 46
+        }
+      },
+      "context": "progress entry informs the choice; lesson schedule does not"
+    },
+    {
+      "id": "gate-046",
+      "input": {
+        "turn": "Should I take an umbrella to Lisbon?",
+        "candidates": [
+          {
+            "id": "travel-lisbon-may",
+            "text": "User travels to Lisbon arriving May 3 and returns May 10",
+            "trust": 0.95,
+            "age_days": 14
+          },
+          {
+            "id": "travel-lisbon-rain-history",
+            "text": "Lisbon in May historically has light rain twice a week",
+            "trust": 0.6,
+            "age_days": 300
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "travel-lisbon-may",
+            "action": "ignore"
+          },
+          {
+            "id": "travel-lisbon-rain-history",
+            "action": "verify"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "dates are known to the user; the rain stat is old and unsourced"
+    },
+    {
+      "id": "gate-047",
+      "input": {
+        "turn": "Summarize my running progress.",
+        "candidates": [
+          {
+            "id": "fitness-half-marathon-204",
+            "text": "User ran a half marathon in 2:04",
+            "trust": 0.94,
+            "age_days": 100
+          },
+          {
+            "id": "fitness-goal-sub2",
+            "text": "User aims to run a half marathon under 2 hours next spring",
+            "trust": 0.94,
+            "age_days": 100
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "fitness-half-marathon-204",
+            "action": "use"
+          },
+          {
+            "id": "fitness-goal-sub2",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 2,
+          "chars_used": 90
+        }
+      },
+      "context": "progress and goal combine into the summary"
+    },
+    {
+      "id": "gate-048",
+      "input": {
+        "turn": "Anything I should know before the HOA meeting?",
+        "candidates": [
+          {
+            "id": "home-hoa-parking-dispute",
+            "text": "The HOA meeting will revisit the guest parking rule change",
+            "trust": 0.65,
+            "age_days": 10
+          },
+          {
+            "id": "home-garage-code",
+            "text": "Garage door code is 4821",
+            "trust": 0.99,
+            "age_days": 20
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "home-hoa-parking-dispute",
+            "action": "verify"
+          },
+          {
+            "id": "home-garage-code",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "agenda item overheard from a neighbor; garage code is irrelevant"
+    },
+    {
+      "id": "gate-049",
+      "input": {
+        "turn": "What's the patient portal login?",
+        "candidates": [
+          {
+            "id": "health-portal-credentials",
+            "text": "Patient portal username is alex.mercer and the password hint is 'first school'",
+            "trust": 0.95,
+            "age_days": 5
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "health-portal-credentials",
+            "action": "verify"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "sensitive credential; gate requires confirmation before echoing it"
+    },
+    {
+      "id": "gate-050",
+      "input": {
+        "turn": "Plan a quiet Sunday for me.",
+        "candidates": [
+          {
+            "id": "routine-meditation-after-breakfast",
+            "text": "User meditates for ten minutes after breakfast",
+            "trust": 0.9,
+            "age_days": 40
+          },
+          {
+            "id": "civic-food-bank",
+            "text": "User volunteers at the food bank every second Saturday",
+            "trust": 0.93,
+            "age_days": 40
+          },
+          {
+            "id": "pref-quiet-sundays",
+            "text": "User treats Sundays as screen-free recovery days",
+            "trust": 0.87,
+            "age_days": 80
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "routine-meditation-after-breakfast",
+            "action": "use"
+          },
+          {
+            "id": "civic-food-bank",
+            "action": "ignore"
+          },
+          {
+            "id": "pref-quiet-sundays",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 2,
+          "chars_used": 94
+        }
+      },
+      "context": "Saturday duty cannot collide with Sunday; quiet-day pref binds"
+    },
+    {
+      "id": "gate-051",
+      "input": {
+        "turn": "Who should I cc on the outage report?",
+        "candidates": [
+          {
+            "id": "work-incident-cc-list",
+            "text": "Outage reports go to ops-team and Elena",
+            "trust": 0.91,
+            "age_days": 30
+          },
+          {
+            "id": "work-incident-cc-list-old",
+            "text": "Outage reports used to go to ops-team and Priya",
+            "trust": 0.4,
+            "age_days": 200
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "work-incident-cc-list",
+            "action": "use"
+          },
+          {
+            "id": "work-incident-cc-list-old",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 39
+        }
+      },
+      "context": "current routing wins over the superseded list"
+    },
+    {
+      "id": "gate-052",
+      "input": {
+        "turn": "What did the doctor say about my sodium levels?",
+        "candidates": [
+          {
+            "id": "health-low-sodium-diet",
+            "text": "User follows a low-sodium diet advised by a cardiologist",
+            "trust": 0.97,
+            "age_days": 30
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "health-low-sodium-diet",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 56
+        }
+      },
+      "context": "diet instruction is the closest recorded advice"
+    },
+    {
+      "id": "gate-053",
+      "input": {
+        "turn": "Add renters insurance quotes to the comparison.",
+        "candidates": [
+          {
+            "id": "finance-renters-insurance-quotes",
+            "text": "User collected two renters insurance quotes: 12 and 15 per month",
+            "trust": 0.8,
+            "age_days": 21
+          },
+          {
+            "id": "home-rent-1450",
+            "text": "User's rent is 1450 per month starting January",
+            "trust": 0.92,
+            "age_days": 20
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "finance-renters-insurance-quotes",
+            "action": "use"
+          },
+          {
+            "id": "home-rent-1450",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 64
+        }
+      },
+      "context": "existing quotes belong in the comparison; rent is unrelated"
+    },
+    {
+      "id": "gate-054",
+      "input": {
+        "turn": "Remind me how the treaty vote went for the HOA",
+        "candidates": [
+          {
+            "id": "home-hoa-vote-result",
+            "text": "The HOA approved the fence rule with 18 votes to 5",
+            "trust": 0.9,
+            "age_days": 200
+          },
+          {
+            "id": "home-hoa-vote-result-typo",
+            "text": "The HOA approved the fence rule with 8 votes to 5",
+            "trust": 0.3,
+            "age_days": 200
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "home-hoa-vote-result",
+            "action": "verify"
+          },
+          {
+            "id": "home-hoa-vote-result-typo",
+            "action": "ignore"
+          }
+        ],
+        "budget": {
+          "claims_used": 0,
+          "chars_used": 0
+        }
+      },
+      "context": "two conflicting tallies exist; gate refuses to pick and flags verification"
+    },
+    {
+      "id": "gate-055",
+      "input": {
+        "turn": "What did I promise Sam for her housewarming?",
+        "candidates": [
+          {
+            "id": "social-sam-housewarming-gift",
+            "text": "User promised Sam the blue ceramic vase for her housewarming",
+            "trust": 0.88,
+            "age_days": 9
+          }
+        ]
+      },
+      "expected_output": {
+        "decisions": [
+          {
+            "id": "social-sam-housewarming-gift",
+            "action": "use"
+          }
+        ],
+        "budget": {
+          "claims_used": 1,
+          "chars_used": 60
+        }
+      },
+      "context": "recent promise entry, exact topical match"
+    }
+  ]
+}

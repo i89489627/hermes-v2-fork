@@ -1,0 +1,1103 @@
+{
+  "_meta": {
+    "component": "reviewer",
+    "version": "1.0.0",
+    "created_at": "2026-11-20",
+    "description": "P10.T2 eval set: draft facts extracted from a turn plus the existing memory entries they were matched against, labeled with the reviewer's decision. action semantics: add = no existing entry covers the draft; update = an existing entry covers the same topic and the draft revises or extends it (target names the entry, history keeps the old value); skip = the draft restates an existing entry with no new information; conflict = the draft contradicts an existing entry without an explicit correction signal, so it needs user review rather than a silent write."
+  },
+  "examples": [
+    {
+      "id": "rev-001",
+      "input": {
+        "draft_facts": [
+          "User prefers oat milk in coffee"
+        ],
+        "existing_entries": [
+          {
+            "id": "pref-coffee-almond-milk",
+            "text": "User prefers almond milk in coffee"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "pref-coffee-almond-milk",
+        "reason": "same topic, the turn reports a deliberate switch"
+      },
+      "context": "turn explicitly said the user switched milks"
+    },
+    {
+      "id": "rev-002",
+      "input": {
+        "draft_facts": [
+          "User prefers oat milk in coffee"
+        ],
+        "existing_entries": [
+          {
+            "id": "pref-coffee-oat-milk",
+            "text": "User prefers oat milk in coffee"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "pref-coffee-oat-milk",
+        "reason": "exact duplicate of the stored entry"
+      },
+      "context": "re-extraction of an already stored fact"
+    },
+    {
+      "id": "rev-003",
+      "input": {
+        "draft_facts": [
+          "User's sister is named Priya",
+          "Priya's birthday is March 14"
+        ],
+        "existing_entries": []
+      },
+      "expected_output": {
+        "action": "add",
+        "target": null,
+        "reason": "no entries exist for this topic yet"
+      },
+      "context": "empty memory for family facts"
+    },
+    {
+      "id": "rev-004",
+      "input": {
+        "draft_facts": [
+          "User is allergic to peanuts"
+        ],
+        "existing_entries": [
+          {
+            "id": "health-allergy-penicillin",
+            "text": "User is allergic to penicillin"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "add",
+        "target": null,
+        "reason": "different allergen, existing entry does not cover it"
+      },
+      "context": "related domain, distinct fact"
+    },
+    {
+      "id": "rev-005",
+      "input": {
+        "draft_facts": [
+          "User hates cilantro"
+        ],
+        "existing_entries": [
+          {
+            "id": "pref-no-cilantro",
+            "text": "User wants cilantro excluded from recipes"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "pref-no-cilantro",
+        "reason": "dislike is entailed by the stored exclusion rule"
+      },
+      "context": "draft is a weaker restatement"
+    },
+    {
+      "id": "rev-006",
+      "input": {
+        "draft_facts": [
+          "User's rent is 1600 per month starting January"
+        ],
+        "existing_entries": [
+          {
+            "id": "home-rent-1450",
+            "text": "User's rent is 1450 per month starting January"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "home-rent-1450",
+        "reason": "contradicts the stored rent with no correction signal in the draft source"
+      },
+      "context": "amount differs; needs user confirmation before overwriting"
+    },
+    {
+      "id": "rev-007",
+      "input": {
+        "draft_facts": [
+          "User's sprint review is on Wednesdays"
+        ],
+        "existing_entries": [
+          {
+            "id": "work-sprint-review-schedule",
+            "text": "User's sprint review is on Mondays"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "work-sprint-review-schedule",
+        "reason": "turn announced the meeting moved; entry is superseded"
+      },
+      "context": "explicit schedule change reported in the turn"
+    },
+    {
+      "id": "rev-008",
+      "input": {
+        "draft_facts": [
+          "User drives a Volkswagen ID.4"
+        ],
+        "existing_entries": [
+          {
+            "id": "auto-honda-civic",
+            "text": "User drives a Honda Civic"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "auto-honda-civic",
+        "reason": "turn reported selling the Honda; ownership entry must change"
+      },
+      "context": "vehicle replacement stated explicitly"
+    },
+    {
+      "id": "rev-009",
+      "input": {
+        "draft_facts": [
+          "User drives a BMW"
+        ],
+        "existing_entries": [
+          {
+            "id": "auto-id4-electric",
+            "text": "User drives a Volkswagen ID.4"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "auto-id4-electric",
+        "reason": "different car with no purchase or sale statement in the turn"
+      },
+      "context": "plausible hallucinated correction; requires review"
+    },
+    {
+      "id": "rev-010",
+      "input": {
+        "draft_facts": [
+          "User's passport expires June 2027"
+        ],
+        "existing_entries": [
+          {
+            "id": "docs-passport-expiry",
+            "text": "User's passport expires June 2027"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "docs-passport-expiry",
+        "reason": "identical expiry date already stored"
+      },
+      "context": "no new information"
+    },
+    {
+      "id": "rev-011",
+      "input": {
+        "draft_facts": [
+          "User's passport expires December 2026"
+        ],
+        "existing_entries": [
+          {
+            "id": "docs-passport-expiry",
+            "text": "User's passport expires June 2027"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "docs-passport-expiry",
+        "reason": "expiry moved earlier with no renewal event in the turn"
+      },
+      "context": "date regression; likely extraction error"
+    },
+    {
+      "id": "rev-012",
+      "input": {
+        "draft_facts": [
+          "User renewed their passport, now valid until June 2037"
+        ],
+        "existing_entries": [
+          {
+            "id": "docs-passport-expiry",
+            "text": "User's passport expires June 2027"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "docs-passport-expiry",
+        "reason": "renewal event explains and justifies the new expiry"
+      },
+      "context": "explicit event supersedes the stored date"
+    },
+    {
+      "id": "rev-013",
+      "input": {
+        "draft_facts": [
+          "User meditates for ten minutes after breakfast"
+        ],
+        "existing_entries": [
+          {
+            "id": "routine-morning-run",
+            "text": "User runs two miles every morning"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "add",
+        "target": null,
+        "reason": "morning routine entry does not cover meditation"
+      },
+      "context": "same domain, new habit"
+    },
+    {
+      "id": "rev-014",
+      "input": {
+        "draft_facts": [
+          "User meditates for ten minutes after breakfast"
+        ],
+        "existing_entries": [
+          {
+            "id": "routine-meditation",
+            "text": "User meditates daily"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "routine-meditation",
+        "reason": "draft adds duration and timing detail to a broader stored entry"
+      },
+      "context": "refinement of an existing habit entry"
+    },
+    {
+      "id": "rev-015",
+      "input": {
+        "draft_facts": [
+          "User takes propranolol for migraine prevention"
+        ],
+        "existing_entries": [
+          {
+            "id": "health-migraine-topamax",
+            "text": "User takes topiramate for migraine prevention"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "health-migraine-topamax",
+        "reason": "turn reported the doctor switched the medication"
+      },
+      "context": "explicit medication change"
+    },
+    {
+      "id": "rev-016",
+      "input": {
+        "draft_facts": [
+          "User takes insulin daily"
+        ],
+        "existing_entries": [
+          {
+            "id": "health-migraine-propranolol",
+            "text": "User takes propranolol for migraine prevention"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "health-migraine-propranolol",
+        "reason": "draft asserts an unmentioned replacement of the only stored medication"
+      },
+      "context": "no diabetes or switch context exists in the turn"
+    },
+    {
+      "id": "rev-017",
+      "input": {
+        "draft_facts": [
+          "The launch logo is blue"
+        ],
+        "existing_entries": [
+          {
+            "id": "work-logo-decision-blue",
+            "text": "The launch logo is blue"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "work-logo-decision-blue",
+        "reason": "decision already recorded verbatim"
+      },
+      "context": "re-confirmed decision"
+    },
+    {
+      "id": "rev-018",
+      "input": {
+        "draft_facts": [
+          "The launch logo is amber after a second vote"
+        ],
+        "existing_entries": [
+          {
+            "id": "work-logo-decision-blue",
+            "text": "The launch logo is blue"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "work-logo-decision-blue",
+        "reason": "a new vote event reverses the recorded decision"
+      },
+      "context": "explicit decision reversal"
+    },
+    {
+      "id": "rev-019",
+      "input": {
+        "draft_facts": [
+          "User's manager is named Elena"
+        ],
+        "existing_entries": [
+          {
+            "id": "work-manager-elena",
+            "text": "User's manager is Elena"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "work-manager-elena",
+        "reason": "same fact modulo punctuation"
+      },
+      "context": "cosmetically different duplicate"
+    },
+    {
+      "id": "rev-020",
+      "input": {
+        "draft_facts": [
+          "User's manager is named Carlos"
+        ],
+        "existing_entries": [
+          {
+            "id": "work-manager-elena",
+            "text": "User's manager is Elena"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "work-manager-elena",
+        "reason": "different manager name without a reorg statement"
+      },
+      "context": "manager changes need an explicit event"
+    },
+    {
+      "id": "rev-021",
+      "input": {
+        "draft_facts": [
+          "Elena became the user's manager after the October reorg"
+        ],
+        "existing_entries": [
+          {
+            "id": "work-manager-carlos",
+            "text": "User's manager is Carlos"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "work-manager-carlos",
+        "reason": "reorg event justifies replacing the manager entry"
+      },
+      "context": "explained organizational change"
+    },
+    {
+      "id": "rev-022",
+      "input": {
+        "draft_facts": [
+          "User's daughter is named Mia"
+        ],
+        "existing_entries": [
+          {
+            "id": "family-baby-name-ada",
+            "text": "User plans to name their daughter Ada"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "family-baby-name-ada",
+        "reason": "two different names for the same child, no renaming statement"
+      },
+      "context": "name mismatch without explanation"
+    },
+    {
+      "id": "rev-023",
+      "input": {
+        "draft_facts": [
+          "The baby arrived early; her name is Ada"
+        ],
+        "existing_entries": [
+          {
+            "id": "family-baby-due-april",
+            "text": "User's daughter is due in April"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "family-baby-due-april",
+        "reason": "birth supersedes the due-date planning entry"
+      },
+      "context": "expected life event confirmed by the turn"
+    },
+    {
+      "id": "rev-024",
+      "input": {
+        "draft_facts": [
+          "School pickup time is 3:15pm"
+        ],
+        "existing_entries": [
+          {
+            "id": "family-school-pickup",
+            "text": "School pickup time is 3:15pm"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "family-school-pickup",
+        "reason": "identical logistics fact"
+      },
+      "context": "unchanged recurring logistics"
+    },
+    {
+      "id": "rev-025",
+      "input": {
+        "draft_facts": [
+          "School pickup moved to 2:45pm for the winter term"
+        ],
+        "existing_entries": [
+          {
+            "id": "family-school-pickup",
+            "text": "School pickup time is 3:15pm"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "family-school-pickup",
+        "reason": "term-based schedule change announced by the user"
+      },
+      "context": "seasonal schedule adjustment"
+    },
+    {
+      "id": "rev-026",
+      "input": {
+        "draft_facts": [
+          "User volunteers at the food bank every second Saturday"
+        ],
+        "existing_entries": []
+      },
+      "expected_output": {
+        "action": "add",
+        "target": null,
+        "reason": "no volunteering entry exists"
+      },
+      "context": "brand-new topic"
+    },
+    {
+      "id": "rev-027",
+      "input": {
+        "draft_facts": [
+          "User stopped volunteering at the food bank"
+        ],
+        "existing_entries": [
+          {
+            "id": "civic-food-bank",
+            "text": "User volunteers at the food bank every second Saturday"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "civic-food-bank",
+        "reason": "explicit stop statement retires the recurring commitment"
+      },
+      "context": "negative update on a stored habit"
+    },
+    {
+      "id": "rev-028",
+      "input": {
+        "draft_facts": [
+          "User never volunteers anywhere"
+        ],
+        "existing_entries": [
+          {
+            "id": "civic-food-bank",
+            "text": "User volunteers at the food bank every second Saturday"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "civic-food-bank",
+        "reason": "blanket denial contradicts a concrete stored commitment"
+      },
+      "context": "likely overgeneralized draft; needs review"
+    },
+    {
+      "id": "rev-029",
+      "input": {
+        "draft_facts": [
+          "User's blood type is O negative"
+        ],
+        "existing_entries": [
+          {
+            "id": "health-blood-type",
+            "text": "User's blood type is O negative"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "health-blood-type",
+        "reason": "stable medical identity fact, already exact"
+      },
+      "context": "immutable fact re-stated"
+    },
+    {
+      "id": "rev-030",
+      "input": {
+        "draft_facts": [
+          "User's blood type is A positive"
+        ],
+        "existing_entries": [
+          {
+            "id": "health-blood-type",
+            "text": "User's blood type is O negative"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "health-blood-type",
+        "reason": "blood types do not change and no correction was stated"
+      },
+      "context": "biologically impossible update; review required"
+    },
+    {
+      "id": "rev-031",
+      "input": {
+        "draft_facts": [
+          "User's wifi password is now falcon-lane-9"
+        ],
+        "existing_entries": [
+          {
+            "id": "home-cabin-wifi",
+            "text": "Cabin wifi password is sled-dog-42"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "home-cabin-wifi",
+        "reason": "new password for a different network id, turn never mentions the cabin"
+      },
+      "context": "credential swap without matching scope"
+    },
+    {
+      "id": "rev-032",
+      "input": {
+        "draft_facts": [
+          "The cabin wifi password changed to falcon-lane-9 after the router swap"
+        ],
+        "existing_entries": [
+          {
+            "id": "home-cabin-wifi",
+            "text": "Cabin wifi password is sled-dog-42"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "home-cabin-wifi",
+        "reason": "same network, explicit rotation event"
+      },
+      "context": "scoped credential update"
+    },
+    {
+      "id": "rev-033",
+      "input": {
+        "draft_facts": [
+          "User's mortgage lender is Halcyon Credit Union",
+          "The refinance closes December 5"
+        ],
+        "existing_entries": [
+          {
+            "id": "finance-mortgage-firstridge",
+            "text": "User's mortgage lender is FirstRidge Bank"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "finance-mortgage-firstridge",
+        "reason": "refinance event transfers the loan to the new lender"
+      },
+      "context": "lender change backed by the refinance fact"
+    },
+    {
+      "id": "rev-034",
+      "input": {
+        "draft_facts": [
+          "User's mortgage lender is Halcyon Credit Union"
+        ],
+        "existing_entries": [
+          {
+            "id": "finance-mortgage-halcyon",
+            "text": "User's mortgage lender is Halcyon Credit Union"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "finance-mortgage-halcyon",
+        "reason": "lender unchanged after refinance completed earlier"
+      },
+      "context": "already-consistent state"
+    },
+    {
+      "id": "rev-035",
+      "input": {
+        "draft_facts": [
+          "User travels to Lisbon arriving May 3"
+        ],
+        "existing_entries": [
+          {
+            "id": "travel-lisbon-may",
+            "text": "User travels to Lisbon arriving May 3 and returns May 10"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "travel-lisbon-may",
+        "reason": "draft is a subset of the stored entry"
+      },
+      "context": "partial restatement adds nothing"
+    },
+    {
+      "id": "rev-036",
+      "input": {
+        "draft_facts": [
+          "User travels to Porto arriving May 3"
+        ],
+        "existing_entries": [
+          {
+            "id": "travel-lisbon-may",
+            "text": "User travels to Lisbon arriving May 3 and returns May 10"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "travel-lisbon-may",
+        "reason": "destination differs with no rebooking mention"
+      },
+      "context": "city swap without an event"
+    },
+    {
+      "id": "rev-037",
+      "input": {
+        "draft_facts": [
+          "The Lisbon trip was rebooked to June 14-21"
+        ],
+        "existing_entries": [
+          {
+            "id": "travel-lisbon-may",
+            "text": "User travels to Lisbon arriving May 3 and returns May 10"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "travel-lisbon-may",
+        "reason": "explicit rebooking event shifts the stored dates"
+      },
+      "context": "event-driven itinerary change"
+    },
+    {
+      "id": "rev-038",
+      "input": {
+        "draft_facts": [
+          "User's blog runs on Astro"
+        ],
+        "existing_entries": [
+          {
+            "id": "tech-blog-astro",
+            "text": "User's blog runs on Astro"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "tech-blog-astro",
+        "reason": "current stack already stored"
+      },
+      "context": "no drift"
+    },
+    {
+      "id": "rev-039",
+      "input": {
+        "draft_facts": [
+          "User's blog runs on Astro with a Depot build pipeline"
+        ],
+        "existing_entries": [
+          {
+            "id": "tech-blog-astro",
+            "text": "User's blog runs on Astro"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "tech-blog-astro",
+        "reason": "draft extends the stack entry with the build detail"
+      },
+      "context": "additive refinement"
+    },
+    {
+      "id": "rev-040",
+      "input": {
+        "draft_facts": [
+          "User's blog runs on Ghost"
+        ],
+        "existing_entries": [
+          {
+            "id": "tech-blog-astro",
+            "text": "User's blog runs on Astro"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "tech-blog-astro",
+        "reason": "different platform, turn describes neither migration nor experiment"
+      },
+      "context": "stack contradiction without process"
+    },
+    {
+      "id": "rev-041",
+      "input": {
+        "draft_facts": [
+          "User has physiotherapy at 8am on Thursdays"
+        ],
+        "existing_entries": [
+          {
+            "id": "health-physio-thursday",
+            "text": "User has physiotherapy at 7am on Thursdays"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "health-physio-thursday",
+        "reason": "time differs; turn gave no rescheduling context"
+      },
+      "context": "one-hour discrepancy"
+    },
+    {
+      "id": "rev-042",
+      "input": {
+        "draft_facts": [
+          "Physio moved to 8am on Thursdays until the knee heals"
+        ],
+        "existing_entries": [
+          {
+            "id": "health-physio-thursday",
+            "text": "User has physiotherapy at 7am on Thursdays"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "health-physio-thursday",
+        "reason": "stated temporary rescheduling of the known appointment"
+      },
+      "context": "explained time change"
+    },
+    {
+      "id": "rev-043",
+      "input": {
+        "draft_facts": [
+          "User wants meeting-free mornings"
+        ],
+        "existing_entries": [
+          {
+            "id": "pref-no-early-afternoon-meetings",
+            "text": "User avoids meetings between 1pm and 2pm"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "add",
+        "target": null,
+        "reason": "existing rule covers early afternoon only; mornings are new"
+      },
+      "context": "adjacent but distinct preference"
+    },
+    {
+      "id": "rev-044",
+      "input": {
+        "draft_facts": [
+          "User avoids meetings between 1pm and 2pm"
+        ],
+        "existing_entries": [
+          {
+            "id": "pref-no-early-afternoon-meetings",
+            "text": "User avoids meetings between 1pm and 2pm"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "pref-no-early-afternoon-meetings",
+        "reason": "same window, same rule"
+      },
+      "context": "duplicate scheduling rule"
+    },
+    {
+      "id": "rev-045",
+      "input": {
+        "draft_facts": [
+          "User prefers aisle seats on flights longer than six hours"
+        ],
+        "existing_entries": [
+          {
+            "id": "pref-window-seat",
+            "text": "User prefers window seats"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "pref-window-seat",
+        "reason": "draft states the long-haul exception that qualifies the blanket rule"
+      },
+      "context": "exception carve-out on a stored preference"
+    },
+    {
+      "id": "rev-046",
+      "input": {
+        "draft_facts": [
+          "User prefers aisle seats on all flights"
+        ],
+        "existing_entries": [
+          {
+            "id": "pref-window-seat",
+            "text": "User prefers window seats"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "pref-window-seat",
+        "reason": "blanket reversal without the stated exception or a change event"
+      },
+      "context": "overbroad draft against a specific stored rule"
+    },
+    {
+      "id": "rev-047",
+      "input": {
+        "draft_facts": [
+          "The bakery on Ninth Street has closed permanently"
+        ],
+        "existing_entries": [
+          {
+            "id": "place-bakery-ninth",
+            "text": "User's favorite bakery is on Ninth Street"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "place-bakery-ninth",
+        "reason": "closure event invalidates the stored recommendation"
+      },
+      "context": "world change affecting a stored place"
+    },
+    {
+      "id": "rev-048",
+      "input": {
+        "draft_facts": [
+          "User's favorite bakery is on Ninth Street"
+        ],
+        "existing_entries": [
+          {
+            "id": "place-bakery-ninth",
+            "text": "User's favorite bakery is on Ninth Street"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "place-bakery-ninth",
+        "reason": "same favorite already recorded"
+      },
+      "context": "steady-state favorite"
+    },
+    {
+      "id": "rev-049",
+      "input": {
+        "draft_facts": [
+          "User ran a half marathon in 2:04 on Sunday"
+        ],
+        "existing_entries": [
+          {
+            "id": "fitness-half-marathon-204",
+            "text": "User ran a half marathon in 2:04"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "fitness-half-marathon-204",
+        "reason": "same result with incidental date detail"
+      },
+      "context": "re-reported achievement"
+    },
+    {
+      "id": "rev-050",
+      "input": {
+        "draft_facts": [
+          "User ran a half marathon in 1:58 on Sunday"
+        ],
+        "existing_entries": [
+          {
+            "id": "fitness-half-marathon-204",
+            "text": "User ran a half marathon in 2:04"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "fitness-half-marathon-204",
+        "reason": "a new race result supersedes the previous personal record"
+      },
+      "context": "fresh race with a better time"
+    },
+    {
+      "id": "rev-051",
+      "input": {
+        "draft_facts": [
+          "User ran a half marathon in 1:20"
+        ],
+        "existing_entries": [
+          {
+            "id": "fitness-half-marathon-204",
+            "text": "User ran a half marathon in 2:04"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "conflict",
+        "target": "fitness-half-marathon-204",
+        "reason": "implausible 44-minute jump with no race context in the turn"
+      },
+      "context": "elite-level time from a casual runner; likely bad extraction"
+    },
+    {
+      "id": "rev-052",
+      "input": {
+        "draft_facts": [
+          "The side-project stack needs DATABASE_URL and REDIS_URL set"
+        ],
+        "existing_entries": [
+          {
+            "id": "tech-dev-env-vars",
+            "text": "The side-project stack needs DATABASE_URL and REDIS_URL set"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "skip",
+        "target": "tech-dev-env-vars",
+        "reason": "setup requirements unchanged"
+      },
+      "context": "unchanged dev-environment note"
+    },
+    {
+      "id": "rev-053",
+      "input": {
+        "draft_facts": [
+          "The side-project stack now also needs a SERVICE_TOKEN env var"
+        ],
+        "existing_entries": [
+          {
+            "id": "tech-dev-env-vars",
+            "text": "The side-project stack needs DATABASE_URL and REDIS_URL set"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "tech-dev-env-vars",
+        "reason": "requirement list grows; entry should carry the union"
+      },
+      "context": "additive environment change"
+    },
+    {
+      "id": "rev-054",
+      "input": {
+        "draft_facts": [
+          "User lent Marcus 300 EUR on November 1",
+          "User lent Marcus 200 EUR on October 12"
+        ],
+        "existing_entries": [
+          {
+            "id": "finance-loan-to-marcus",
+            "text": "User lent Marcus 200 EUR on October 12"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "finance-loan-to-marcus",
+        "reason": "second loan extends the running total; entry becomes cumulative"
+      },
+      "context": "multiple drafts about one loan thread"
+    },
+    {
+      "id": "rev-055",
+      "input": {
+        "draft_facts": [
+          "Marcus repaid the 200 EUR loan in full on November 15"
+        ],
+        "existing_entries": [
+          {
+            "id": "finance-loan-to-marcus",
+            "text": "User lent Marcus 200 EUR on October 12"
+          }
+        ]
+      },
+      "expected_output": {
+        "action": "update",
+        "target": "finance-loan-to-marcus",
+        "reason": "repayment event closes the outstanding balance on the entry"
+      },
+      "context": "settlement updates the loan state"
+    }
+  ]
+}

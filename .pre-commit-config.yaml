@@ -1,0 +1,23 @@
+# hermes-v2 pre-commit hooks (plan P0.T4): ruff, mypy, quick pytest.
+# Local hooks — run inside the repository venv (ruff/mypy/pytest are dev deps).
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-v2
+        name: ruff check (hermes-v2 scope)
+        entry: ruff check hermes/
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: mypy-v2
+        name: mypy (hermes-v2 strict)
+        entry: mypy hermes/
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: pytest-quick
+        name: pytest quick (v2 unit layer)
+        entry: python -m pytest tests/unit -q -m unit
+        language: system
+        pass_filenames: false
+        types: [python]

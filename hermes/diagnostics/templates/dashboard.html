@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<!-- hermes-v2 dashboard template (plan P14.T10). Placeholders — generated_at,
+     health_status, health_checks, metrics_rows, trend_rows, alerts_items,
+     activity_items, chart_data — are filled by
+     hermes.diagnostics.dashboard_http.render_dashboard_html via exact string
+     replacement of the braced tokens (never str.format: the inline CSS
+     braces must survive). Fully offline: inline CSS, inline SVG sparklines,
+     no external CDNs. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hermes-v2 dashboard</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    margin: 0; background: #f1f5f9; color: #0f172a;
+  }
+  header {
+    background: #0f172a; color: #f8fafc; padding: 16px 24px;
+    display: flex; align-items: baseline; gap: 16px;
+  }
+  header h1 { font-size: 20px; margin: 0; }
+  header .generated { font-size: 12px; color: #cbd5e1; }
+  main { max-width: 960px; margin: 0 auto; padding: 16px 24px 48px; }
+  section {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+    margin-top: 16px; padding: 12px 16px;
+  }
+  h2 {
+    font-size: 14px; letter-spacing: 0.08em; margin: 4px 0 10px;
+    color: #475569; text-transform: uppercase;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+  th { color: #64748b; font-weight: 600; font-size: 12px; }
+  .status-line { font-size: 14px; margin: 0 0 8px; }
+  .status {
+    display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-weight: 700; font-size: 12px;
+  }
+  .status-healthy { background: #dcfce7; color: #166534; }
+  .status-degraded { background: #fef9c3; color: #854d0e; }
+  .status-unhealthy { background: #fee2e2; color: #991b1b; }
+  .badge {
+    display: inline-block; padding: 1px 8px; border-radius: 999px;
+    font-weight: 600; font-size: 11px;
+  }
+  .badge-pass, .badge-healthy { background: #dcfce7; color: #166534; }
+  .badge-warn, .badge-degraded { background: #fef9c3; color: #854d0e; }
+  .badge-fail, .badge-unhealthy, .badge-critical { background: #fee2e2; color: #991b1b; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+  ul { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  li { padding: 6px 0; border-bottom: 1px solid #f1f5f9; }
+  li.quiet { color: #64748b; }
+  .spark { display: block; }
+  .spark-empty line { stroke: #cbd5e1; }
+  footer { font-size: 11px; color: #94a3b8; padding: 16px 24px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>hermes-v2 dashboard</h1>
+  <span class="generated">generated {generated_at}</span>
+</header>
+<main>
+  <section id="health">
+    <h2>HEALTH</h2>
+    <p class="status-line">overall status:
+      <span class="status status-{health_status}">{health_status}</span>
+    </p>
+    <table>
+      <thead><tr><th>check</th><th>status</th><th>details</th></tr></thead>
+      <tbody>
+{health_checks}
+      </tbody>
+    </table>
+  </section>
+
+  <section id="metrics">
+    <h2>METRICS</h2>
+    <table>
+      <thead><tr><th>metric</th><th>value</th></tr></thead>
+      <tbody>
+{metrics_rows}
+      </tbody>
+    </table>
+  </section>
+
+  <section id="trends">
+    <h2>TRENDS</h2>
+    <table>
+      <thead><tr><th>trend</th><th>sparkline</th><th>direction / values</th></tr></thead>
+      <tbody>
+{trend_rows}
+      </tbody>
+    </table>
+  </section>
+
+  <section id="alerts">
+    <h2>ALERTS</h2>
+    <ul>
+{alerts_items}
+    </ul>
+  </section>
+
+  <section id="activity">
+    <h2>RECENT ACTIVITY</h2>
+    <ul>
+{activity_items}
+    </ul>
+  </section>
+</main>
+<footer>hermes-v2 self-diagnostics (plan P14.T10) &mdash; served locally, works offline, no external assets.</footer>
+<script id="chart-data" type="application/json">
+{chart_data}
+</script>
+<script>
+  /* Chart placeholder: the JSON document above carries the server-rendered
+     metrics + trend series for future client-side charts. This dashboard is
+     intentionally chart-library-free and offline-capable; the tables and
+     inline SVG sparklines above are the authoritative rendering. */
+  void document.getElementById("chart-data");
+</script>
+</body>
+</html>

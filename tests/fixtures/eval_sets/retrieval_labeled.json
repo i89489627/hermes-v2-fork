@@ -1,0 +1,639 @@
+{
+  "_meta": {
+    "component": "retrieval",
+    "version": "1.0.0",
+    "created_at": "2026-11-20",
+    "description": "P10.T2 eval set: user queries labeled with the memory entries a retriever should surface. expected_output lists the relevant entries as {id, text} pairs (entry ids are stable slugs shared across the eval-set family); a query has at least one relevant entry. Queries deliberately paraphrase, abbreviate, or re-word the stored text rather than copying it."
+  },
+  "examples": [
+    {
+      "id": "ret-001",
+      "input": "what should I put in my coffee these days?",
+      "expected_output": [
+        {
+          "id": "pref-coffee-oat-milk",
+          "text": "User prefers oat milk in coffee"
+        }
+      ],
+      "context": "paraphrased preference lookup; no keyword overlap with 'oat'"
+    },
+    {
+      "id": "ret-002",
+      "input": "when is my sister's birthday?",
+      "expected_output": [
+        {
+          "id": "family-priya-birthday",
+          "text": "Priya's birthday is March 14"
+        }
+      ],
+      "context": "family fact; query uses the relation word, entry uses the name"
+    },
+    {
+      "id": "ret-003",
+      "input": "which mornings do I run standup?",
+      "expected_output": [
+        {
+          "id": "work-payments-standup",
+          "text": "Payments standup runs on Tuesdays and Thursdays"
+        }
+      ],
+      "context": "schedule lookup; 'mornings' vs stored weekday list"
+    },
+    {
+      "id": "ret-004",
+      "input": "what medication did the doctor give me for headaches?",
+      "expected_output": [
+        {
+          "id": "health-migraine-propranolol",
+          "text": "User takes propranolol for migraine prevention"
+        }
+      ],
+      "context": "health lookup; 'headaches' vs stored 'migraine', 'doctor' vs 'neurologist'"
+    },
+    {
+      "id": "ret-005",
+      "input": "good sushi place near the office?",
+      "expected_output": [
+        {
+          "id": "place-tsukiji-sushi",
+          "text": "User regularly dines at Tsukiji Sushi"
+        }
+      ],
+      "context": "restaurant recommendation query against a dining entry"
+    },
+    {
+      "id": "ret-006",
+      "input": "am I still studying languages this year?",
+      "expected_output": [
+        {
+          "id": "goal-japanese-2026",
+          "text": "User is learning Japanese in 2026"
+        }
+      ],
+      "context": "goal lookup; entry reflects that Spanish was dropped"
+    },
+    {
+      "id": "ret-007",
+      "input": "what machine do I use for side projects?",
+      "expected_output": [
+        {
+          "id": "tech-desktop-side-projects",
+          "text": "User uses a desktop machine for side projects"
+        },
+        {
+          "id": "tech-work-laptop",
+          "text": "User's work laptop is a ThinkPad X1 Carbon"
+        }
+      ],
+      "context": "hardware question; work laptop is secondary context"
+    },
+    {
+      "id": "ret-008",
+      "input": "how do you usually format answers for me?",
+      "expected_output": [
+        {
+          "id": "pref-bullet-summaries",
+          "text": "User prefers summary bullet lists over long paragraphs"
+        }
+      ],
+      "context": "formatting preference recall"
+    },
+    {
+      "id": "ret-009",
+      "input": "who holds my mortgage now?",
+      "expected_output": [
+        {
+          "id": "finance-mortgage-halcyon",
+          "text": "User's mortgage lender is Halcyon Credit Union"
+        }
+      ],
+      "context": "finance institution lookup"
+    },
+    {
+      "id": "ret-010",
+      "input": "do I have any trips coming up?",
+      "expected_output": [
+        {
+          "id": "travel-lisbon-may",
+          "text": "User travels to Lisbon arriving May 3 and returns May 10"
+        }
+      ],
+      "context": "upcoming travel query"
+    },
+    {
+      "id": "ret-011",
+      "input": "what time is school pickup?",
+      "expected_output": [
+        {
+          "id": "family-school-pickup",
+          "text": "School pickup time is 3:15pm"
+        }
+      ],
+      "context": "logistics lookup; entry mentions the school name too"
+    },
+    {
+      "id": "ret-012",
+      "input": "the vet said what about Max again?",
+      "expected_output": [
+        {
+          "id": "pet-max-booster",
+          "text": "Max the corgi is due for a rabies booster at Verde Animal Clinic"
+        },
+        {
+          "id": "pet-max-corgi",
+          "text": "User has a corgi named Max"
+        }
+      ],
+      "context": "pet care; both the schedule and the pet identity are relevant"
+    },
+    {
+      "id": "ret-013",
+      "input": "can I eat soy sauce?",
+      "expected_output": [
+        {
+          "id": "health-low-sodium-diet",
+          "text": "User follows a low-sodium diet advised by a cardiologist"
+        }
+      ],
+      "context": "dietary restriction lookup; soy sauce is high-sodium implication"
+    },
+    {
+      "id": "ret-014",
+      "input": "what's the garage code again?",
+      "expected_output": [
+        {
+          "id": "home-garage-code",
+          "text": "Garage door code is 4821"
+        }
+      ],
+      "context": "household credential recall"
+    },
+    {
+      "id": "ret-015",
+      "input": "how did my race go last time?",
+      "expected_output": [
+        {
+          "id": "fitness-half-marathon-204",
+          "text": "User ran a half marathon in 2:04"
+        }
+      ],
+      "context": "fitness history; 'race' vs stored 'half marathon'"
+    },
+    {
+      "id": "ret-016",
+      "input": "who approved the search project budget?",
+      "expected_output": [
+        {
+          "id": "work-budget-approved-vector-search",
+          "text": "Elena approved the budget for the vector search migration"
+        }
+      ],
+      "context": "work decision lookup; 'search project' vs 'vector search migration'"
+    },
+    {
+      "id": "ret-017",
+      "input": "any medicine allergies I should mention?",
+      "expected_output": [
+        {
+          "id": "health-allergy-penicillin",
+          "text": "User is allergic to penicillin"
+        },
+        {
+          "id": "health-allergy-amoxicillin",
+          "text": "User is allergic to amoxicillin"
+        }
+      ],
+      "context": "medical safety lookup; both allergy entries are relevant"
+    },
+    {
+      "id": "ret-018",
+      "input": "what name should you call me?",
+      "expected_output": [
+        {
+          "id": "pref-called-alex",
+          "text": "User prefers the name Alex"
+        }
+      ],
+      "context": "address preference; formal name entry is not the answer"
+    },
+    {
+      "id": "ret-019",
+      "input": "how much goes into savings automatically?",
+      "expected_output": [
+        {
+          "id": "finance-vacation-transfer",
+          "text": "User auto-transfers 400 EUR monthly into a vacation fund"
+        }
+      ],
+      "context": "recurring finance amount; 'savings' vs 'vacation fund'"
+    },
+    {
+      "id": "ret-020",
+      "input": "what did we name the baby?",
+      "expected_output": [
+        {
+          "id": "family-baby-name-ada",
+          "text": "User plans to name their daughter Ada"
+        }
+      ],
+      "context": "family decision lookup"
+    },
+    {
+      "id": "ret-021",
+      "input": "when is sprint review now?",
+      "expected_output": [
+        {
+          "id": "work-sprint-review-schedule",
+          "text": "User's sprint review is on Wednesdays"
+        },
+        {
+          "id": "work-sprint-review-room",
+          "text": "User's sprint review takes place in the Orion room"
+        }
+      ],
+      "context": "meeting logistics; schedule and location entries both answer it"
+    },
+    {
+      "id": "ret-022",
+      "input": "which airline should we avoid?",
+      "expected_output": [
+        {
+          "id": "pref-avoid-delta",
+          "text": "User refuses to fly Delta"
+        }
+      ],
+      "context": "negative preference lookup"
+    },
+    {
+      "id": "ret-023",
+      "input": "what's the wifi at the cabin?",
+      "expected_output": [
+        {
+          "id": "home-cabin-wifi",
+          "text": "Cabin wifi password is sled-dog-42"
+        }
+      ],
+      "context": "location-scoped credential recall"
+    },
+    {
+      "id": "ret-024",
+      "input": "window or aisle for the Tokyo flight?",
+      "expected_output": [
+        {
+          "id": "pref-window-seat",
+          "text": "User prefers window seats"
+        },
+        {
+          "id": "pref-aisle-long-haul",
+          "text": "User prefers aisle seats on flights longer than six hours"
+        }
+      ],
+      "context": "long-haul flight; the over-six-hours aisle rule is the specific answer"
+    },
+    {
+      "id": "ret-025",
+      "input": "what's my blood type?",
+      "expected_output": [
+        {
+          "id": "health-blood-type",
+          "text": "User's blood type is O negative"
+        }
+      ],
+      "context": "medical identity lookup"
+    },
+    {
+      "id": "ret-026",
+      "input": "how much is rent these days?",
+      "expected_output": [
+        {
+          "id": "home-rent-1450",
+          "text": "User's rent is 1450 per month starting January"
+        }
+      ],
+      "context": "housing cost lookup"
+    },
+    {
+      "id": "ret-027",
+      "input": "what static site setup do I run for the blog?",
+      "expected_output": [
+        {
+          "id": "tech-blog-astro",
+          "text": "User's blog runs on Astro"
+        }
+      ],
+      "context": "tech stack lookup; WordPress archive entry is stale context"
+    },
+    {
+      "id": "ret-028",
+      "input": "am I free early Thursday?",
+      "expected_output": [
+        {
+          "id": "health-physio-thursday",
+          "text": "User has physiotherapy at 7am on Thursdays"
+        }
+      ],
+      "context": "conflict-check query against a recurring commitment"
+    },
+    {
+      "id": "ret-029",
+      "input": "what foods should never be in a recipe for me?",
+      "expected_output": [
+        {
+          "id": "pref-no-cilantro",
+          "text": "User wants cilantro excluded from recipes"
+        },
+        {
+          "id": "health-low-sodium-diet",
+          "text": "User follows a low-sodium diet advised by a cardiologist"
+        }
+      ],
+      "context": "cooking constraints; aversion plus medical restriction both bind"
+    },
+    {
+      "id": "ret-030",
+      "input": "what does Mia do on Saturdays?",
+      "expected_output": [
+        {
+          "id": "family-mia-piano",
+          "text": "Mia takes piano lessons with Mr. Rossi on Saturdays"
+        }
+      ],
+      "context": "family schedule lookup by name"
+    },
+    {
+      "id": "ret-031",
+      "input": "when does the client work have to be done?",
+      "expected_output": [
+        {
+          "id": "work-client-deadline-nov30",
+          "text": "User's client deadline is November 30"
+        }
+      ],
+      "context": "deadline lookup; 'client work' vs stored 'client deadline'"
+    },
+    {
+      "id": "ret-032",
+      "input": "what car do I drive now?",
+      "expected_output": [
+        {
+          "id": "auto-id4-electric",
+          "text": "User drives a Volkswagen ID.4"
+        }
+      ],
+      "context": "current-vehicle lookup; sold-Honda entry is superseded context"
+    },
+    {
+      "id": "ret-033",
+      "input": "what do I do on weekends to help out?",
+      "expected_output": [
+        {
+          "id": "civic-food-bank",
+          "text": "User volunteers at the food bank every second Saturday"
+        }
+      ],
+      "context": "volunteering lookup; paraphrased 'help out'"
+    },
+    {
+      "id": "ret-034",
+      "input": "what's my timezone situation for scheduling?",
+      "expected_output": [
+        {
+          "id": "prefs-timezone-cet-utc",
+          "text": "User lives in the CET timezone and keeps their calendar in UTC"
+        }
+      ],
+      "context": "scheduling constraint lookup"
+    },
+    {
+      "id": "ret-035",
+      "input": "why did the site go down in October?",
+      "expected_output": [
+        {
+          "id": "ops-outage-tls-edge2",
+          "text": "The outage root cause was an expired TLS certificate on edge-2"
+        }
+      ],
+      "context": "incident history lookup"
+    },
+    {
+      "id": "ret-036",
+      "input": "what's my morning routine like?",
+      "expected_output": [
+        {
+          "id": "routine-meditation-after-breakfast",
+          "text": "User meditates for ten minutes after breakfast"
+        }
+      ],
+      "context": "routine lookup; query is broader than the single stored habit"
+    },
+    {
+      "id": "ret-037",
+      "input": "what does Sam think we're doing for the anniversary?",
+      "expected_output": [
+        {
+          "id": "secret-trip-cover-story",
+          "text": "Sam believes the anniversary trip is to Kyoto"
+        }
+      ],
+      "context": "secret cover story; the real destination entry must NOT be surfaced"
+    },
+    {
+      "id": "ret-038",
+      "input": "did I get that promotion?",
+      "expected_output": [
+        {
+          "id": "career-senior-engineer",
+          "text": "User was promoted to senior engineer effective December 1"
+        }
+      ],
+      "context": "career status lookup"
+    },
+    {
+      "id": "ret-039",
+      "input": "where can I still get good bread around here?",
+      "expected_output": [
+        {
+          "id": "place-bakery-ninth-closed",
+          "text": "The bakery on Ninth Street has closed permanently"
+        }
+      ],
+      "context": "recommendation query; the relevant entry is the closure notice"
+    },
+    {
+      "id": "ret-040",
+      "input": "what school are the kids at?",
+      "expected_output": [
+        {
+          "id": "family-riverside-elementary",
+          "text": "User's children attend Riverside Elementary"
+        }
+      ],
+      "context": "school lookup"
+    },
+    {
+      "id": "ret-041",
+      "input": "which assistant is best for writing code, per my own notes?",
+      "expected_output": [
+        {
+          "id": "pref-claude-coding",
+          "text": "User prefers Claude for coding help"
+        }
+      ],
+      "context": "tool preference lookup; trip-planning entry is irrelevant"
+    },
+    {
+      "id": "ret-042",
+      "input": "when does the Northwind thing renew?",
+      "expected_output": [
+        {
+          "id": "finance-northwind-renewal",
+          "text": "Northwind contract must be cancelled by January 15 to stop renewal"
+        }
+      ],
+      "context": "contract deadline lookup; vague 'thing' reference"
+    },
+    {
+      "id": "ret-043",
+      "input": "where do invoices get sent?",
+      "expected_output": [
+        {
+          "id": "finance-invoice-reminders",
+          "text": "Invoice reminders go to accounting@fernworks.io monthly on the first"
+        }
+      ],
+      "context": "finance process lookup"
+    },
+    {
+      "id": "ret-044",
+      "input": "how long until my travel documents expire?",
+      "expected_output": [
+        {
+          "id": "docs-passport-expiry",
+          "text": "User's passport expires June 2027"
+        }
+      ],
+      "context": "document expiry; 'travel documents' vs stored 'passport'"
+    },
+    {
+      "id": "ret-045",
+      "input": "the combination for grandpa's place?",
+      "expected_output": [
+        {
+          "id": "family-shed-combination",
+          "text": "Grandpa's shed lock combination is 1973"
+        }
+      ],
+      "context": "family credential lookup; 'place' vs stored 'shed'"
+    },
+    {
+      "id": "ret-046",
+      "input": "which logo won?",
+      "expected_output": [
+        {
+          "id": "work-logo-decision-blue",
+          "text": "The launch logo is blue"
+        }
+      ],
+      "context": "decision lookup; vote-score entry is supporting detail"
+    },
+    {
+      "id": "ret-047",
+      "input": "bank number to call if a charge looks wrong?",
+      "expected_output": [
+        {
+          "id": "finance-fraud-hotline",
+          "text": "User's bank fraud hotline is 0800-555-0199"
+        }
+      ],
+      "context": "emergency contact lookup; heavy paraphrase"
+    },
+    {
+      "id": "ret-048",
+      "input": "am I allowed caffeine before the scan?",
+      "expected_output": [
+        {
+          "id": "health-scan-prep-instructions",
+          "text": "User must fast four hours before the December CT scan"
+        }
+      ],
+      "context": "procedure prep lookup; caffeine falls under fasting rule"
+    },
+    {
+      "id": "ret-049",
+      "input": "what did I say about meetings right after lunch?",
+      "expected_output": [
+        {
+          "id": "pref-no-early-afternoon-meetings",
+          "text": "User avoids meetings between 1pm and 2pm"
+        }
+      ],
+      "context": "scheduling preference lookup; 'after lunch' vs stored hour range"
+    },
+    {
+      "id": "ret-050",
+      "input": "remind me who teaches the Saturday class",
+      "expected_output": [
+        {
+          "id": "family-mia-piano",
+          "text": "Mia takes piano lessons with Mr. Rossi on Saturdays"
+        }
+      ],
+      "context": "teacher name lookup; query omits that it is piano for Mia"
+    },
+    {
+      "id": "ret-051",
+      "input": "do I owe anyone money right now?",
+      "expected_output": [
+        {
+          "id": "finance-loan-to-marcus",
+          "text": "User lent Marcus 200 EUR on October 12"
+        }
+      ],
+      "context": "outstanding balance lookup; user owes nothing, the loan is the match"
+    },
+    {
+      "id": "ret-052",
+      "input": "what environment variables does my dev stack need?",
+      "expected_output": [
+        {
+          "id": "tech-dev-env-vars",
+          "text": "The side-project stack needs DATABASE_URL and REDIS_URL set"
+        }
+      ],
+      "context": "developer setup recall"
+    },
+    {
+      "id": "ret-053",
+      "input": "when did I last see the dentist?",
+      "expected_output": [
+        {
+          "id": "health-dental-cleaning",
+          "text": "User's last dental cleaning was September 9 at Bright Smile Clinic"
+        }
+      ],
+      "context": "medical history lookup"
+    },
+    {
+      "id": "ret-054",
+      "input": "what was the plan for mom's sixtieth?",
+      "expected_output": [
+        {
+          "id": "family-mom-60th-party",
+          "text": "Family party for mom's 60th birthday is planned for February 8"
+        }
+      ],
+      "context": "event plan lookup"
+    },
+    {
+      "id": "ret-055",
+      "input": "which password manager do I use?",
+      "expected_output": [
+        {
+          "id": "tech-password-manager",
+          "text": "User manages passwords with Bitwarden"
+        }
+      ],
+      "context": "tooling lookup"
+    }
+  ]
+}

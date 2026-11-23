@@ -1,0 +1,2776 @@
+meta:
+  project: hermes-v2
+  fork_base: github.com/NousResearch/hermes-agent
+  fork_base_version: v2026.9.24 (commit f97608f)
+  target_version: v2.1.0
+  license: MIT
+  plan_document: ./hermes-v2-improvement-plan-r7.md
+  plan_version: v2.1-r7
+  estimated_total_tasks: 112
+  estimated_total_phases: 21
+  # labor-time estimates removed in r5 (executor: coding agent/harness, not a human engineer);
+  # execution order is defined by the task dependency graph
+  revision_log:
+  - rev: r1
+    change: Initial 17-phase plan (720h)
+  - rev: r2
+    change: 'GLM review fixes: dependency order, hot-reload, phases 17-20, P3.T6, P14.T7-T10'
+  - rev: r3
+    change: Removed phase_9 (tiered models) and phase_12 (distillation); merged round2 supplements; added
+      phase_22 (performance); fixed deps and texts referencing removed phases
+  - rev: r3.1
+    change: 'Final audit vs ZCode-plugin hypothesis: added P2.T5 (automatic ground-truth anchors) and
+      P7.T5 (session compaction summaries); plan weights example fixed (tool-output 0.55 -> 0.85)'
+  - rev: r3.2
+    change: 'Check 3: mutation testing policy (plan Section 4.7, tasks P20.T5/P20.T6, Phase 21 regression
+      tests must kill bug re-mutants, mutation CI gates); fixed day/hour mismatches (P3 6.5d, P10 7d,
+      P14 7d, P19 3d, P21 10d); Phase 4 gating -> single batched call + 3.5s timeout trust-only fallback;
+      P21.T5 watchdog alerts surface via Phase 14 diagnostics (cron_job_stuck)'
+  - rev: r4
+    change: 'Check 4 (final): P21.T11 deps P1.T6/P18.T4 -> P0.T3 (critical bugs T1+T11 executable right
+      after Phase 0); P14.T1 += P18.T1 (backup_freshness); P14.T3 -> 12 alert rules (was 7); P4.T3
+      benchmark rename test_full_injection_under_2s -> under_5s (hard budget, typical <2s); P0.T4
+      nightly mutation job; phase_21 goal 10 -> 12 bugs; P22.T1 scheduling note; files renamed with
+      check version (-r4)'
+  - rev: r5
+    change: 'Removed human labor-time estimates (user: the plan is executed by a coding agent/harness,
+      not an engineer): dropped effort_hours from all tasks and phases, estimated_total_hours and
+      effort_model from meta; plan loses Effort lines, day counts in phase headers, Hours column in
+      Phase 21 tables, days in Section 7 diagram and Total estimate; execution order is defined by
+      the dependency graph only. Runtime budgets (gate 3.5s, backup 25h, GEPA <8 days) untouched.
+      Files renamed -r4 -> -r5'
+  - rev: r6
+    change: 'Full English translation of plan and tasks.yaml (single-language documents for
+      any coding agent/harness); no content changes; files renamed -r5 -> -r6'
+  - rev: r7
+    change: 'Check 6 dry-run remediation (7 verdict points): fork-base pinned to v2026.9.24
+      (commit f97608f; v0.18.2 does not exist upstream; migration artifacts renamed fork_to_v2_0);
+      creator-first file plan: 20 files_to_modify-only paths moved to files_to_create (Phase 21
+      tasks author the v2 modules they fix; hermes/core/agent.py created in P0.T3 per plan Phase 0
+      Files; P14.T6 creates hermes/gateway/health.py instead of the bare directory); 9 dependency
+      edges added (P18.T3 += P14.T4, P8.T2 += P3.T4, P11.T2 += P3.T5, P20.T6 += P21.T5/P17.T2/
+      P17.T4/P19.T2, P19.T4 += P19.T2, P21.T6 += P21.T12); tests/**/__init__.py skeleton (P0.T3) keeps
+      pytest default import mode working (pytest 9 removed the importmode ini option); 3 duplicate tests renamed with owning-phase suffix (_p20, _p8);
+      P0.T4 ci.yml moved to files_to_modify; section 7 flags document P14.T1 -> P18.T1 and
+      P3.T6 -> P11.T1. Files renamed -r6 -> -r7'
+global_settings:
+  python_version: '>=3.11'
+  line_length: 100
+  test_framework: pytest
+  test_markers:
+  - unit
+  - integration
+  - property
+  - benchmark
+  - e2e
+  coverage_threshold: 85
+  ci_required: true
+  git_commit_format: '[{task_id}] {summary}'
+  mutation_testing:
+    tool: mutmut
+    policy: all deterministic-logic unit/property tests must be mutation-tested (plan Section 4.7); LLM-glue,
+      integration/e2e/chaos/benchmark and one-time migrations are out of scope
+    per_pr_mode: diff_on_changed_modules
+    nightly_full_run: true
+    tier1_score_threshold: 0.95
+    tier2_score_threshold: 0.85
+    survivor_policy: fix_test_or_pragma_no_mutate_with_justification
+phase_0:
+  name: Foundation & fork setup
+  goal: Fork Hermes, set up development environment, define v2.0 module skeleton
+  tasks:
+  - id: P0.T1
+    title: Fork repository and verify baseline
+    description: Fork NousResearch/hermes-agent to <org>/hermes-v2. Clone, install deps, run existing
+      test suite. pyproject.toml carries the pytest config (markers unit, integration, property,
+      benchmark, e2e); the tests/**/__init__.py skeleton (P0.T3) keeps duplicate test basenames
+      importable in pytest's default import mode (pytest 9 has no importmode ini option - check 6
+      C-IMPORTMODE).
+    files_to_create:
+    - pyproject.toml
+    - .github/workflows/ci.yml
+    files_to_modify: []
+    tests_to_write:
+    - tests/test_fork_baseline.py::test_existing_tests_pass
+    - tests/test_fork_baseline.py::test_imports_clean
+    acceptance_criteria:
+    - All v2026.9.24 tests pass
+    - Fork pushed to GitHub
+    - pyproject.toml carries the pytest config with markers (check 6 C-IMPORTMODE)
+    dependencies: []
+    status: pending
+  - id: P0.T2
+    title: Configure tooling (ruff, mypy, pytest)
+    description: Add ruff config (line=100, select E/F/W/I/N/UP/B/SIM), mypy strict for new modules, pytest
+      markers.
+    files_to_create:
+    - ruff.toml
+    files_to_modify:
+    - pyproject.toml
+    tests_to_write: []
+    acceptance_criteria:
+    - ruff check hermes/ clean
+    - mypy hermes/memory/ clean (new modules only)
+    - pytest --markers lists unit/integration/property/benchmark/e2e
+    dependencies:
+    - P0.T1
+    status: pending
+  - id: P0.T3
+    title: Create module skeleton
+    description: 'Create empty module directories with __init__.py: hermes/memory, hermes/mcp, hermes/models,
+      hermes/traces, hermes/optimization, hermes/concurrency, hermes/diagnostics, hermes/skills, hermes/gateway.
+      Also creates hermes/core/agent.py extended from the upstream run_agent.py (plan Phase 0
+      Files) - the v2 agent module modified by Phases 2-8, 13, 15 and the Phase 21 fixes.
+      Also creates the tests/**/__init__.py package skeleton (plan Appendix A) so duplicate
+      test basenames across tests dirs stay importable in pytest default mode (check 6
+      C-IMPORTMODE; pytest 9 has no importmode ini option).'
+    files_to_create:
+    - hermes/__init__.py
+    - hermes/memory/__init__.py
+    - hermes/mcp/__init__.py
+    - hermes/models/__init__.py
+    - hermes/traces/__init__.py
+    - hermes/optimization/__init__.py
+    - hermes/concurrency/__init__.py
+    - hermes/diagnostics/__init__.py
+    - hermes/skills/__init__.py
+    - hermes/gateway/__init__.py
+    - hermes/core/__init__.py
+    - hermes/core/agent.py
+    - hermes/config.py
+    - tests/__init__.py
+    - tests/unit/__init__.py
+    - tests/unit/backup/__init__.py
+    - tests/unit/concurrency/__init__.py
+    - tests/unit/core/__init__.py
+    - tests/unit/cron/__init__.py
+    - tests/unit/diagnostics/__init__.py
+    - tests/unit/gateway/__init__.py
+    - tests/unit/mcp/__init__.py
+    - tests/unit/memory/__init__.py
+    - tests/unit/models/__init__.py
+    - tests/unit/optimization/__init__.py
+    - tests/unit/skills/__init__.py
+    - tests/unit/storage/__init__.py
+    - tests/unit/traces/__init__.py
+    - tests/integration/__init__.py
+    - tests/property/__init__.py
+    - tests/chaos/__init__.py
+    - tests/benchmark/__init__.py
+    - tests/mutation/__init__.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/test_module_skeleton.py::test_all_modules_import
+    acceptance_criteria:
+    - All modules import without errors
+    - Python 3.11+ syntax verified
+    dependencies:
+    - P0.T1
+    status: pending
+  - id: P0.T4
+    title: Set up CI pipeline
+    description: 'GitHub Actions workflow: lint + type-check + unit tests on PR; integration tests on
+      merge; nightly E2E + mutation run (mutmut per plan Section 4.7; full scope and thresholds
+      are configured in P20.T5 — on the skeleton with an empty in-scope list the job is trivially
+      green). Extends the ci.yml created in P0.T1.'
+    files_to_create:
+    - .github/workflows/nightly.yml
+    - .pre-commit-config.yaml
+    files_to_modify:
+    - .github/workflows/ci.yml
+    tests_to_write: []
+    acceptance_criteria:
+    - CI green on main branch
+    - PR triggers lint+type+unit
+    - Merge triggers integration tests
+    - Nightly mutation job configured and green on baseline skeleton (Section 4.7)
+    dependencies:
+    - P0.T2
+    - P0.T3
+    status: pending
+phase_1:
+  name: Storage layer — atomic markdown graph in Git
+  goal: Migrate storage to Git-backed atomic markdown graph with trust card frontmatter
+  tasks:
+  - id: P1.T1
+    title: Define MemoryEntry and TrustCard dataclasses
+    description: Implement dataclasses matching the trust card YAML schema in plan section 2.4.
+    files_to_create:
+    - hermes/memory/entry.py
+    - hermes/memory/trust_card.py
+    - hermes/memory/types.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/memory/test_trust_card.py::test_parse_roundtrip
+    - tests/unit/memory/test_trust_card.py::test_compute_trust_score_weighted_avg
+    - tests/unit/memory/test_trust_card.py::test_verification_event_weights
+    acceptance_criteria:
+    - TrustCard parses YAML frontmatter correctly
+    - trust_score in [0, 1] always
+    - Verification event weights from config
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P1.T2
+    title: Implement GitBackend
+    description: 'Git operations via pygit2: init, commit, branch, merge, log, is_clean.'
+    files_to_create:
+    - hermes/memory/git_backend.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/memory/test_git_backend.py::test_init_creates_repo
+    - tests/unit/memory/test_git_backend.py::test_commit_returns_sha
+    - tests/unit/memory/test_git_backend.py::test_log_returns_history
+    - tests/unit/memory/test_git_backend.py::test_branch_and_merge
+    - tests/unit/memory/test_git_backend.py::test_is_clean_after_commit
+    acceptance_criteria:
+    - Every write creates a Git commit
+    - Branch/merge work as expected
+    - is_clean() returns false on dirty state
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P1.T3
+    title: Implement MemoryStore
+    description: CRUD operations on memory entries with Git commit on every write. Context-aware (global
+      vs contexts/<name>).
+    files_to_create:
+    - hermes/memory/store.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/memory/test_store.py::test_add_creates_file_and_commits
+    - tests/unit/memory/test_store.py::test_get_returns_entry
+    - tests/unit/memory/test_store.py::test_update_modifies_trust_score
+    - tests/unit/memory/test_store.py::test_remove_deletes_file
+    - tests/unit/memory/test_store.py::test_list_filters_by_context_type_tag
+    - tests/unit/memory/test_store.py::test_context_isolation
+    acceptance_criteria:
+    - Add creates atomic markdown file + Git commit
+    - 'Context isolation: global fact not in context list'
+    - All CRUD operations transactional
+    dependencies:
+    - P1.T1
+    - P1.T2
+    status: pending
+  - id: P1.T4
+    title: Implement BM25 search
+    description: Search over all entries using rank_bm25. Index built on entry text + tags.
+    files_to_create:
+    - hermes/memory/search.py
+    files_to_modify:
+    - hermes/memory/store.py
+    tests_to_write:
+    - tests/unit/memory/test_search.py::test_bm25_returns_relevant_top_k
+    - tests/unit/memory/test_search.py::test_empty_query_returns_empty
+    - tests/unit/memory/test_search.py::test_search_filters_by_context
+    acceptance_criteria:
+    - BM25 search returns relevant entries in top-5 for typical queries
+    - Search latency <100ms for 1000 entries
+    dependencies:
+    - P1.T3
+    status: pending
+  - id: P1.T5
+    title: Implement file locking (flock)
+    description: Prevent concurrent write corruption via fcntl.flock on ${HERMES_HOME}/.lock
+    files_to_create:
+    - hermes/memory/locking.py
+    files_to_modify:
+    - hermes/memory/store.py
+    tests_to_write:
+    - tests/unit/memory/test_locking.py::test_acquire_release
+    - tests/unit/memory/test_locking.py::test_concurrent_acquire_blocks
+    - tests/unit/memory/test_locking.py::test_lock_timeout
+    acceptance_criteria:
+    - Two concurrent writes don't corrupt files
+    - Lock timeout configurable
+    dependencies:
+    - P1.T3
+    status: pending
+  - id: P1.T6
+    title: Write fork-base migration script to v2.0
+    description: Read old ~/.hermes/memories/*.md, parse entries, create new atomic files with default
+      trust cards.
+    files_to_create:
+    - hermes/memory/migrations/fork_to_v2_0.py
+    - scripts/migrate_fork_to_v2_0.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/integration/test_migration.py::test_fork_to_v2_0_preserves_entries
+    - tests/integration/test_migration.py::test_fork_to_v2_0_sets_default_trust
+    - tests/integration/test_migration.py::test_migration_dry_run_mode
+    - tests/integration/test_migration.py::test_migration_rollback_script
+    acceptance_criteria:
+    - All v2026.9.24 memory entries migrate without data loss
+    - 'Default trust_score: 0.5 for entries without explicit verification'
+    - Dry-run mode reports changes without applying
+    - Rollback script restores the fork-base format
+    dependencies:
+    - P1.T3
+    status: pending
+phase_2:
+  name: Trust cards & provenance
+  goal: Full trust card implementation, verification events, trust score computation, forgetting curve
+  tasks:
+  - id: P2.T1
+    title: Implement verification event tracking
+    description: Every memory operation creates a verification event. Trust score recomputed.
+    files_to_create:
+    - hermes/memory/verification.py
+    files_to_modify:
+    - hermes/memory/trust_card.py
+    - hermes/memory/store.py
+    tests_to_write:
+    - tests/unit/memory/test_verification.py::test_add_event_updates_score
+    - tests/unit/memory/test_verification.py::test_multiple_events_weighted_avg
+    - tests/unit/memory/test_verification.py::test_user_explicit_higher_than_llm
+    - tests/unit/memory/test_verification.py::test_test_green_highest_weight
+    acceptance_criteria:
+    - Every memory entry has >=1 verification event
+    - Trust score = weighted avg of all events
+    - 'Weights (plan 2.4): user-explicit=1.0, test-green=1.0, code-review-human=0.95, tool-output=0.85,
+      file-read=0.7, agent-inferred=0.5, llm=0.3'
+    dependencies:
+    - P1.T1
+    - P1.T3
+    status: pending
+  - id: P2.T2
+    title: Implement forgetting curve
+    description: 'Daily decay: score * exp(-0.01 * days_since_verification). Archive entries below 0.2.'
+    files_to_create:
+    - hermes/memory/decay.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/memory/test_decay.py::test_decay_reduces_score_over_time
+    - tests/unit/memory/test_decay.py::test_decay_zero_after_1_year
+    - tests/unit/memory/test_decay.py::test_recently_verified_unchanged
+    - tests/unit/memory/test_decay.py::test_archive_stale_moves_files
+    - tests/unit/memory/test_decay.py::test_archived_recoverable
+    acceptance_criteria:
+    - Decay runs daily via cron
+    - Entries with trust <0.2 archived to memory-repo/archive/
+    - Archived entries recoverable
+    dependencies:
+    - P2.T1
+    status: pending
+  - id: P2.T3
+    title: Implement verify MCP tool
+    description: MCP tool callable by main agent to add verification events.
+    files_to_create:
+    - hermes/mcp/verify_tool.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/integration/test_verify_tool.py::test_verify_via_mcp_adds_event
+    - tests/integration/test_verify_tool.py::test_verify_with_evidence_text
+    - tests/integration/test_verify_tool.py::test_verify_test_green_event
+    acceptance_criteria:
+    - verify(entry_id, source, evidence) updates trust score
+    - Tool accessible via MCP protocol
+    dependencies:
+    - P2.T1
+    status: pending
+  - id: P2.T4
+    title: Add daily decay cron job
+    description: Background scheduler runs decay daily at 03:00 local time.
+    files_to_create:
+    - hermes/memory/decay_scheduler.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/integration/test_decay_scheduler.py::test_cron_runs_daily
+    - tests/integration/test_decay_scheduler.py::test_manual_trigger
+    acceptance_criteria:
+    - Decay runs automatically daily
+    - Manual trigger via /diagnostics run-decay
+    dependencies:
+    - P2.T2
+    status: pending
+  - id: P2.T5
+    title: Automatic ground-truth anchors (test/build hook)
+    description: 'Hook on command execution (PostToolUse equivalent): when a test suite or build completes,
+      find memory entries cited in the session / touching changed files, and append a test-green (weight
+      1.0) or test-red event automatically. Implements the hypothesis element ''who verifies the verifier'':
+      anchors are rule-based, not LLM-based.'
+    files_to_create:
+    - hermes/memory/anchors.py
+    files_to_modify:
+    - hermes/core/agent.py
+    - hermes/memory/verification.py
+    tests_to_write:
+    - tests/unit/memory/test_anchors.py::test_test_green_appends_weight_1_event
+    - tests/unit/memory/test_anchors.py::test_test_red_downweights_related_entries
+    - tests/unit/memory/test_anchors.py::test_unrelated_entries_untouched
+    - tests/integration/test_anchors.py::test_full_run_updates_trust_scores
+    acceptance_criteria:
+    - Test suite run automatically appends test-green/test-red events to related entries
+    - No manual verify call needed for rule-based anchors
+    - Unrelated entries untouched (matching by session citation + changed-file overlap)
+    dependencies:
+    - P2.T1
+    status: pending
+phase_3:
+  name: Two-stage extractor + reviewer pipeline
+  goal: Replace single memory tool with extractor subagent + reviewer subagent pipeline. Multi-turn context
+    included (P3.T6, ex-round2 supplement).
+  tasks:
+  - id: P3.T1
+    title: Define DraftFact and ReviewAction dataclasses
+    description: 'DraftFact: proposed entry from extractor. ReviewAction: {action: add|update|skip|conflict,
+      target_id, rationale}.'
+    files_to_create:
+    - hermes/memory/draft.py
+    files_to_modify:
+    - hermes/memory/types.py
+    tests_to_write:
+    - tests/unit/memory/test_draft.py::test_draft_fact_serialization
+    - tests/unit/memory/test_draft.py::test_review_action_validates_action_enum
+    acceptance_criteria:
+    - DraftFact has all trust card fields (text, type, proposed_source, etc.)
+    - ReviewAction.action in {add, update, skip, conflict}
+    dependencies:
+    - P1.T1
+    status: pending
+  - id: P3.T2
+    title: Implement ExtractorAgent
+    description: Agent that takes a turn and extracts draft facts. Uses the main model via Hermes LLM
+      API (single-model architecture, r3). Outputs structured JSON.
+    files_to_create:
+    - hermes/memory/extractor.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/memory/test_extractor.py::test_extracts_user_preference
+    - tests/unit/memory/test_extractor.py::test_extracts_project_fact
+    - tests/unit/memory/test_extractor.py::test_extracts_feedback_correction
+    - tests/unit/memory/test_extractor.py::test_empty_turn_no_drafts
+    - tests/unit/memory/test_extractor.py::test_structured_output_schema_valid
+    - tests/property/test_extractor.py::test_output_always_valid_json
+    acceptance_criteria:
+    - Produces valid JSON for 95%+ of turns
+    - 'Schema: [{type, text, proposed_source, confidence, context_hint}]'
+    - Empty turn produces empty list
+    dependencies:
+    - P3.T1
+    status: pending
+  - id: P3.T3
+    title: Implement ReviewerAgent
+    description: Agent that takes drafts + existing entries (semantic search top-5) and decides add/update/skip/conflict.
+    files_to_create:
+    - hermes/memory/reviewer.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/memory/test_reviewer.py::test_add_action_for_new_fact
+    - tests/unit/memory/test_reviewer.py::test_update_action_for_related_existing
+    - tests/unit/memory/test_reviewer.py::test_skip_action_for_exact_duplicate
+    - tests/unit/memory/test_reviewer.py::test_conflict_detection_returns_special_action
+    - tests/property/test_reviewer.py::test_action_always_in_allowed_set
+    acceptance_criteria:
+    - Correctly identifies duplicates in 90%+ cases
+    - Conflict detection returns ReviewAction with action=conflict
+    - 'Output schema: {action, target_id, rationale, merged_text?}'
+    dependencies:
+    - P3.T1
+    - P3.T2
+    status: pending
+  - id: P3.T4
+    title: Implement MemoryPipeline orchestrator
+    description: 'Runs async after Stop hook: extract drafts -> review -> apply actions to MemoryStore.'
+    files_to_create:
+    - hermes/memory/pipeline.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/integration/test_pipeline.py::test_full_pipeline_turn_to_committed_entry
+    - tests/integration/test_pipeline.py::test_pipeline_async_does_not_block_turn
+    - tests/integration/test_pipeline.py::test_metrics_recorded
+    - tests/integration/test_pipeline.py::test_conflict_triggers_resolution_flow
+    acceptance_criteria:
+    - Pipeline completes within 10s for typical turn (async)
+    - All actions logged with rationale
+    - Conflict actions trigger ReviewerAgent second pass with conflict context
+    dependencies:
+    - P3.T2
+    - P3.T3
+    - P1.T3
+    status: pending
+  - id: P3.T5
+    title: Hook pipeline into Stop event
+    description: Register Stop hook to trigger pipeline.run_after_turn(turn_id) async.
+    files_to_create:
+    - hermes/memory/hooks/stop_hook.py
+    files_to_modify:
+    - hermes/core/agent.py
+    tests_to_write:
+    - tests/integration/test_stop_hook.py::test_stop_triggers_pipeline
+    - tests/integration/test_stop_hook.py::test_pipeline_failure_does_not_crash_session
+    acceptance_criteria:
+    - Stop hook fires pipeline async
+    - Pipeline failure logged but doesn't crash session
+    dependencies:
+    - P3.T4
+    status: pending
+  - id: P3.T6
+    title: Multi-turn context for extractor
+    description: 'Extractor currently sees only current turn. Add multi-turn context window
+
+      (last N turns from Trace Store or session history) so extractor can:
+
+      - Understand references ("yes, use that approach" → which approach?)
+
+      - Detect intent shifts across turns
+
+      - Avoid re-extracting facts already confirmed in prior turns
+
+      Implementation: pass last 3-5 turns as context to extractor prompt.
+
+      Add new field to DraftFact: source_turn_ids (list of turns that contributed).
+
+      '
+    files_to_create:
+    - hermes/memory/context_window.py
+    files_to_modify:
+    - hermes/memory/extractor.py
+    - hermes/memory/draft.py
+    tests_to_write:
+    - tests/unit/memory/test_context_window.py::test_returns_last_n_turns
+    - tests/unit/memory/test_context_window.py::test_filters_by_session
+    - tests/unit/memory/test_extractor.py::test_extracts_with_multi_turn_context
+    - tests/unit/memory/test_extractor.py::test_does_not_reextract_confirmed_facts
+    - tests/unit/memory/test_extractor.py::test_resolves_references_across_turns
+    - tests/integration/test_pipeline.py::test_multi_turn_extraction_workflow
+    - tests/property/test_extractor.py::test_output_valid_with_any_context_size
+    acceptance_criteria:
+    - Extractor receives last 3-5 turns as context
+    - References across turns resolved (e.g., 'that approach' -> extracted correctly)
+    - Facts already confirmed in prior turns not re-extracted
+    - DraftFact.source_turn_ids populated
+    - Latency increase <200ms vs single-turn extraction
+    dependencies:
+    - P3.T2
+    - P11.T1
+    status: pending
+    notes: Requires Phase 11 (Trace Store) OR session history API. If Trace Store not yet available, can
+      use in-memory session history as fallback initially.
+phase_4:
+  name: CBDC gating for proactive injection
+  goal: Pre-step hook retrieves + gates (use/verify/ignore) + injects within budget
+  tasks:
+  - id: P4.T1
+    title: Implement RetrievalEngine
+    description: BM25 + optional vector search. Returns top-K candidates for a query.
+    files_to_create:
+    - hermes/memory/retrieval.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/memory/test_retrieval.py::test_bm25_returns_relevant_top_k
+    - tests/unit/memory/test_retrieval.py::test_empty_query_returns_empty
+    - tests/unit/memory/test_retrieval.py::test_filters_by_context
+    - tests/benchmark/test_retrieval_latency.py::test_bm25_under_100ms_for_1000_entries
+    acceptance_criteria:
+    - BM25 search <100ms for 1000 entries
+    - Context-aware (only retrieves from active context + global)
+    dependencies:
+    - P1.T3
+    - P1.T4
+    status: pending
+  - id: P4.T2
+    title: Implement CBDCGate
+    description: 'Main model classifies all top-3 retrieved candidates in ONE batched call (single prompt
+      -> JSON decision list); check 3 replaced the former 3 sequential calls (3x1-3s would exceed the
+      5s hook budget on a slow main model). BM25 pre-filter: only top-3 candidates are gated, not all
+      retrieved. Budget enforcement (<=3 claims, <=1200 chars) is deterministic post-processing (mutation-tested,
+      Tier-1 per Section 4.7). Hard timeout 3.5s -> fallback to trust-score-only gating (plan Section
+      5.5).'
+    files_to_create:
+    - hermes/memory/gating.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/memory/test_gating.py::test_use_decision_for_high_trust_relevant
+    - tests/unit/memory/test_gating.py::test_verify_decision_for_medium_trust
+    - tests/unit/memory/test_gating.py::test_ignore_decision_for_irrelevant
+    - tests/unit/memory/test_gating.py::test_budget_claims_enforced
+    - tests/unit/memory/test_gating.py::test_budget_chars_enforced
+    - tests/unit/memory/test_gating.py::test_single_batched_call_per_turn
+    - tests/unit/memory/test_gating.py::test_timeout_falls_back_to_trust_only
+    - tests/property/test_gating.py::test_injected_count_never_exceeds_budget
+    - tests/property/test_gating.py::test_all_injected_have_use_decision
+    - tests/benchmark/test_gating_latency.py::test_cbdc_gate_under_3500ms
+    acceptance_criteria:
+    - 'Budget: <=3 claims, <=1200 chars per injection'
+    - Single batched main-model call per turn (not 3 sequential)
+    - Gate timeout 3.5s -> trust-only fallback; full hook <5s
+    - 'Output: {decision, reason, candidate_id}'
+    dependencies:
+    - P4.T1
+    status: pending
+  - id: P4.T3
+    title: Implement ContextInjector (stable/dynamic split)
+    description: 'Stable context: global user profile + active context MEMORY.md, loaded once. Dynamic:
+      per-turn gated facts.'
+    files_to_create:
+    - hermes/memory/injector.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/memory/test_injector.py::test_stable_context_loaded_at_session_start
+    - tests/unit/memory/test_injector.py::test_dynamic_context_changes_per_turn
+    - tests/unit/memory/test_injector.py::test_stable_context_preserves_prefix_cache
+    - tests/benchmark/test_injector_latency.py::test_full_injection_under_5s
+    acceptance_criteria:
+    - Stable context changes <=1 time per session
+    - 'Full injection (retrieve+gate+inject): typical <2s, hard budget <5s (hook timeout)'
+    - 'Output: additionalContext JSON for UserPromptSubmit hook'
+    dependencies:
+    - P4.T2
+    - P5.T1
+    status: pending
+  - id: P4.T4
+    title: Register UserPromptSubmit hook
+    description: Pre-step hook calls injector.build_context(turn) and returns additionalContext.
+    files_to_create:
+    - hermes/memory/hooks/user_prompt_submit_hook.py
+    files_to_modify:
+    - hermes/core/agent.py
+    tests_to_write:
+    - tests/integration/test_hooks.py::test_pre_step_hook_injects_context
+    - tests/integration/test_hooks.py::test_no_injection_when_no_relevant_facts
+    - tests/integration/test_hooks.py::test_hook_timeout_handled_gracefully
+    acceptance_criteria:
+    - Hook completes within 2s for typical turn (5s timeout)
+    - No injection when no relevant facts (don't pollute context)
+    - Timeout returns empty additionalContext, doesn't crash
+    dependencies:
+    - P4.T3
+    status: pending
+phase_5:
+  name: Project/context layer
+  goal: Multiple contexts (work, personal, project-X) with per-context memory
+  tasks:
+  - id: P5.T1
+    title: Implement ContextManager
+    description: 'Detect/switch/create contexts. Detection: by cwd, by gateway chat id, by explicit /context
+      switch.'
+    files_to_create:
+    - hermes/memory/context.py
+    files_to_modify:
+    - hermes/memory/types.py
+    tests_to_write:
+    - tests/unit/memory/test_context.py::test_detect_by_cwd
+    - tests/unit/memory/test_context.py::test_detect_by_gateway_chat_id
+    - tests/unit/memory/test_context.py::test_switch_reloads_stable_context
+    - tests/unit/memory/test_context.py::test_create_with_parent
+    - tests/unit/memory/test_context.py::test_list_returns_all
+    acceptance_criteria:
+    - Context auto-detected for CLI (cwd) and gateway (chat id)
+    - Switch reloads stable context (session boundary)
+    - Contexts can have parent (inherit global facts)
+    dependencies:
+    - P1.T3
+    status: pending
+  - id: P5.T2
+    title: Add /context slash command
+    description: 'Subcommands: list, switch <name>, create <name>, inspect [name], delete <name>'
+    files_to_create:
+    - commands/context.md
+    files_to_modify:
+    - hermes/core/agent.py
+    tests_to_write:
+    - tests/integration/test_context_workflow.py::test_user_creates_switches_contexts
+    - tests/integration/test_context_workflow.py::test_facts_isolated_per_context
+    - tests/integration/test_context_workflow.py::test_context_inherits_global_facts
+    acceptance_criteria:
+    - All subcommands work as specified
+    - Facts isolated per context
+    - Context inherits global facts unless overridden
+    dependencies:
+    - P5.T1
+    status: pending
+  - id: P5.T3
+    title: Multi-faceted USER.md
+    description: global/user-profile.md + contexts/<name>/user-profile.md. Active context's overrides
+      global.
+    files_to_create:
+    - hermes/memory/user_profile.py
+    files_to_modify:
+    - hermes/memory/store.py
+    tests_to_write:
+    - tests/unit/memory/test_user_profile.py::test_global_profile_loaded
+    - tests/unit/memory/test_user_profile.py::test_context_profile_overrides_global
+    - tests/unit/memory/test_user_profile.py::test_merge_global_and_context
+    acceptance_criteria:
+    - Context profile overrides global for same fields
+    - Non-overlapping fields merge
+    dependencies:
+    - P5.T1
+    status: pending
+  - id: P5.T4
+    title: 'Migration: existing memory to global context'
+    description: All fork-base (v2026.9.24) memory becomes global context. No data loss.
+    files_to_modify:
+    - hermes/memory/migrations/fork_to_v2_0.py
+    tests_to_write:
+    - tests/integration/test_migration.py::test_migration_creates_global_context
+    - tests/integration/test_migration.py::test_existing_facts_become_global
+    acceptance_criteria:
+    - Migration creates global/ context
+    - All existing facts in global/facts/
+    dependencies:
+    - P1.T6
+    - P5.T1
+    status: pending
+phase_6:
+  name: Concurrent writers & multi-agent support
+  goal: Multiple agent processes share one Hermes home without corruption
+  tasks:
+  - id: P6.T1
+    title: Implement ConcurrencyManager (file locking)
+    description: fcntl.flock on ${HERMES_HOME}/.lock. Timeout configurable.
+    files_to_create:
+    - hermes/concurrency/manager.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/concurrency/test_lock.py::test_acquire_release
+    - tests/unit/concurrency/test_lock.py::test_concurrent_acquire_blocks
+    - tests/unit/concurrency/test_lock.py::test_lock_timeout
+    acceptance_criteria:
+    - Lock acquired/released cleanly
+    - Concurrent acquire blocks second caller
+    - Timeout raises LockTimeoutError
+    dependencies:
+    - P1.T5
+    status: pending
+  - id: P6.T2
+    title: Implement WriterProcess (daemon)
+    description: Background process reads write ops from Unix socket queue, serializes, applies to MemoryStore.
+    files_to_create:
+    - hermes/concurrency/writer.py
+    - hermes/concurrency/protocol.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/integration/test_writer.py::test_writer_processes_queue
+    - tests/integration/test_writer.py::test_subagent_writes_via_queue
+    - tests/integration/test_writer.py::test_writer_handles_100_writes_per_sec
+    acceptance_criteria:
+    - Writer handles >=100 writes/sec
+    - Subagents connect via Unix socket
+    - Write order preserved per client
+    dependencies:
+    - P6.T1
+    status: pending
+  - id: P6.T3
+    title: Writer crash recovery
+    description: Agents detect writer death (socket closed), restart writer, replay pending writes.
+    files_to_create:
+    - hermes/concurrency/recovery.py
+    files_to_modify:
+    - hermes/concurrency/manager.py
+    tests_to_write:
+    - tests/integration/test_writer.py::test_writer_crash_recovery
+    - tests/integration/test_writer.py::test_pending_writes_replayed
+    - tests/integration/test_multi_agent.py::test_two_agents_share_home
+    acceptance_criteria:
+    - Crash recovery within 5s
+    - No write lost on crash
+    - Two agents run simultaneously without corruption
+    dependencies:
+    - P6.T2
+    status: pending
+phase_7:
+  name: Long-session handling — hot-reload & topic detection
+  goal: Memory updates visible mid-session via selective prefix cache invalidation
+  tasks:
+  - id: P7.T1
+    title: Implement MemoryHotReloader (segmented system prompt)
+    description: Each memory entry wrapped with markers in system prompt. Updates invalidate only affected
+      segment.
+    files_to_create:
+    - hermes/memory/hot_reload.py
+    files_to_modify:
+    - hermes/memory/injector.py
+    tests_to_write:
+    - tests/unit/memory/test_hot_reload.py::test_invalidate_specific_segment
+    - tests/unit/memory/test_hot_reload.py::test_other_segments_unchanged
+    - tests/unit/memory/test_hot_reload.py::test_reload_returns_updated_content
+    acceptance_criteria:
+    - Only affected segment invalidated
+    - Other segments unchanged (prefix cache preserved)
+    - Reload reads fresh content from MemoryStore
+    dependencies:
+    - P4.T3
+    status: pending
+  - id: P7.T2
+    title: Wire hot-reload to memory tool updates
+    description: When memory tool updates entry, find affected segment, invalidate.
+    files_to_modify:
+    - hermes/memory/store.py
+    - hermes/memory/hot_reload.py
+    tests_to_write:
+    - tests/integration/test_long_session.py::test_memory_update_visible_mid_session
+    - tests/integration/test_long_session.py::test_prefix_cache_hit_rate_above_80_percent
+    acceptance_criteria:
+    - Memory updates visible within 1 turn of being written
+    - Prefix cache hit rate >=80%
+    dependencies:
+    - P7.T1
+    status: pending
+  - id: P7.T3
+    title: Implement TopicDetector
+    description: Main model classifies topic shifts. Every N messages, compare vs previous topic.
+    files_to_create:
+    - hermes/gateway/topic_detector.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/gateway/test_topic_detector.py::test_detects_clear_topic_shift
+    - tests/unit/gateway/test_topic_detector.py::test_no_shift_for_continuation
+    - tests/unit/gateway/test_topic_detector.py::test_85_percent_accuracy_on_labeled_set
+    acceptance_criteria:
+    - 85%+ accuracy on labeled test set
+    - Latency <500ms per detection
+    dependencies:
+    - P4.T2
+    status: pending
+  - id: P7.T4
+    title: Virtual session boundaries
+    description: On topic shift, create virtual session. Memory extraction scoped to virtual session.
+    files_to_create:
+    - hermes/gateway/session_manager.py
+    files_to_modify:
+    - hermes/memory/pipeline.py
+    tests_to_write:
+    - tests/integration/test_long_session.py::test_virtual_session_extraction_isolated
+    - tests/integration/test_long_session.py::test_explicit_session_new_command
+    acceptance_criteria:
+    - Virtual sessions create clean memory boundaries
+    - User can override with /session new
+    dependencies:
+    - P7.T3
+    - P3.T4
+    status: pending
+  - id: P7.T5
+    title: Session compaction summaries (first-class citizens)
+    description: 'SessionCompactor (hermes/memory/compaction.py): on virtual session close (topic shift)
+      or when session exceeds N turns, generate a compact summary stored as a Reference-type memory entry
+      whose source points to the trace range (''memory points, doesn''t mirror''). Extraction uses compaction
+      summaries as primary input, raw turns secondary (DSH pattern).'
+    files_to_create:
+    - hermes/memory/compaction.py
+    files_to_modify:
+    - hermes/memory/pipeline.py
+    - hermes/gateway/session_manager.py
+    tests_to_write:
+    - tests/unit/memory/test_compaction.py::test_compact_session_creates_reference_entry
+    - tests/unit/memory/test_compaction.py::test_summary_points_to_trace_range
+    - tests/integration/test_compaction.py::test_extraction_uses_summary_first
+    - tests/property/test_compaction.py::test_summary_never_exceeds_char_limit
+    acceptance_criteria:
+    - Compaction summary created on virtual session close
+    - Stored as Reference entry with trace-range provenance
+    - Extraction prefers compaction summaries over raw turns
+    dependencies:
+    - P7.T4
+    status: pending
+    notes: Can use in-memory session history as trace source until Trace Store is available (same fallback
+      as P3.T6).
+phase_8:
+  name: Memory quality — forgetting curve, conflict detection, multi-modal
+  goal: 'Memory stays high-quality: stale facts decay, conflicts caught, multi-modal supported'
+  tasks:
+  - id: P8.T1
+    title: Implement ConflictDetector
+    description: Pre-write check using sentence-transformers embeddings. Similarity >0.85 = potential
+      conflict.
+    files_to_create:
+    - hermes/memory/conflict_detector.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/memory/test_conflict_detector.py::test_detects_semantic_duplicate
+    - tests/unit/memory/test_conflict_detector.py::test_no_conflict_for_unrelated
+    - tests/unit/memory/test_conflict_detector.py::test_contradiction_returns_special_result
+    acceptance_criteria:
+    - Conflicts detected in 90%+ of test cases
+    - False positive rate <10%
+    - 'Returns: {is_conflict, similarity, conflicting_entry_id}'
+    dependencies:
+    - P1.T3
+    status: pending
+  - id: P8.T2
+    title: Wire conflict detection into reviewer pipeline
+    description: Reviewer calls ConflictDetector before returning action. Conflicts trigger resolution
+      flow.
+    files_to_modify:
+    - hermes/memory/reviewer.py
+    - hermes/memory/pipeline.py
+    tests_to_write:
+    - tests/integration/test_conflict_workflow.py::test_conflict_triggers_reviewer_resolution
+    - tests/integration/test_conflict_workflow.py::test_resolution_creates_audit_trail
+    acceptance_criteria:
+    - Conflicts caught before write
+    - 'Resolution: merge, replace, or skip (with rationale)'
+    - Audit trail in trust card
+    dependencies:
+    - P8.T1
+    - P3.T3
+    - P3.T4
+    status: pending
+  - id: P8.T3
+    title: Implement MultimodalAttachment
+    description: Attach images, audio, structured data to memory entries. Stored in memory-repo/assets/.
+    files_to_create:
+    - hermes/memory/multimodal.py
+    files_to_modify:
+    - hermes/memory/entry.py
+    tests_to_write:
+    - tests/unit/memory/test_multimodal.py::test_attach_image_creates_asset_file
+    - tests/unit/memory/test_multimodal.py::test_attach_audio_creates_asset_file
+    - tests/unit/memory/test_multimodal.py::test_attachment_referenced_in_trust_card
+    - tests/integration/test_multimodal.py::test_attach_image_to_entry
+    acceptance_criteria:
+    - Attachments stored as files in assets/
+    - 'Referenced in trust card attachments: [] field'
+    - 'Size limit per attachment: 10MB'
+    dependencies:
+    - P1.T3
+    status: pending
+  - id: P8.T4
+    title: 'Optional: OCR for image attachments'
+    description: Extract text from images for searchability. Uses tesseract or cloud vision.
+    files_to_create:
+    - hermes/memory/ocr.py
+    files_to_modify:
+    - hermes/memory/multimodal.py
+    tests_to_write:
+    - tests/integration/test_multimodal.py::test_image_searchable_via_ocr
+    - tests/integration/test_multimodal.py::test_ocr_failure_handled_gracefully
+    acceptance_criteria:
+    - Image text extracted and added to entry for search
+    - OCR failure doesn't break attachment
+    dependencies:
+    - P8.T3
+    status: pending
+  - id: P8.T5
+    title: 'Optional: Audio transcription'
+    description: Transcribe voice notes using whisper or cloud speech-to-text.
+    files_to_create:
+    - hermes/memory/transcription.py
+    files_to_modify:
+    - hermes/memory/multimodal.py
+    tests_to_write:
+    - tests/integration/test_multimodal.py::test_audio_transcribed
+    - tests/integration/test_multimodal.py::test_transcription_failure_handled
+    acceptance_criteria:
+    - Audio transcribed and text added to entry
+    - Transcription failure doesn't break attachment
+    dependencies:
+    - P8.T3
+    status: pending
+  - id: P8.T6
+    title: Archive stale entries (extend decay)
+    description: Entries with trust <0.2 archived to memory-repo/archive/. Recoverable.
+    files_to_modify:
+    - hermes/memory/decay.py
+    - hermes/memory/store.py
+    tests_to_write:
+    - tests/unit/memory/test_decay.py::test_archive_stale_moves_files_p8
+    - tests/unit/memory/test_decay.py::test_archived_recoverable_p8
+    - tests/integration/test_archive.py::test_archive_and_recover_workflow
+    acceptance_criteria:
+    - Stale entries (>1 year unverified, trust <0.2) archived
+    - Archived entries recoverable
+    - Archive doesn't affect search results (unless explicitly included)
+    dependencies:
+    - P2.T2
+    status: pending
+phase_10:
+  name: GEPA self-optimization
+  goal: Weekly GEPA runs optimize prompts for all memory subagents
+  tasks:
+  - id: P10.T1
+    title: Define metrics per component
+    description: extraction_f1, retrieval_recall_at_k, gating_precision, review_conflict_detection_accuracy.
+    files_to_create:
+    - hermes/optimization/metrics.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/optimization/test_metrics.py::test_extraction_f1_correct
+    - tests/unit/optimization/test_metrics.py::test_recall_at_k
+    - tests/unit/optimization/test_metrics.py::test_gating_precision
+    - tests/unit/optimization/test_metrics.py::test_conflict_detection_accuracy
+    acceptance_criteria:
+    - All metrics return float in [0, 1]
+    - Metrics match standard definitions
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P10.T2
+    title: Build eval sets
+    description: 50-100 labeled examples per component. Stored in tests/fixtures/eval_sets/.
+    files_to_create:
+    - tests/fixtures/eval_sets/extractor_labeled.json
+    - tests/fixtures/eval_sets/retrieval_labeled.json
+    - tests/fixtures/eval_sets/gating_labeled.json
+    - tests/fixtures/eval_sets/reviewer_labeled.json
+    files_to_modify: []
+    tests_to_write:
+    - tests/integration/test_eval_sets.py::test_eval_sets_have_50_plus_examples
+    - tests/integration/test_eval_sets.py::test_eval_sets_schema_valid
+    acceptance_criteria:
+    - 50-100 labeled examples per component
+    - 'Schema: {input, expected_output, context}'
+    dependencies:
+    - P10.T1
+    status: pending
+  - id: P10.T3
+    title: Implement GEPA adapters per component
+    description: 'GEPAAdapter for each: extractor, reviewer, gate, rewriter. Implement evaluate() and
+      make_reflective_dataset().'
+    files_to_create:
+    - hermes/optimization/adapters/extractor_adapter.py
+    - hermes/optimization/adapters/reviewer_adapter.py
+    - hermes/optimization/adapters/gate_adapter.py
+    - hermes/optimization/adapters/rewriter_adapter.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/optimization/test_extractor_adapter.py::test_evaluate_returns_score_and_feedback
+    - tests/unit/optimization/test_extractor_adapter.py::test_make_reflective_dataset_filters_failures
+    - tests/unit/optimization/test_reviewer_adapter.py::test_evaluate_returns_score_and_feedback
+    - tests/unit/optimization/test_gate_adapter.py::test_evaluate_returns_score_and_feedback
+    acceptance_criteria:
+    - Each adapter implements GEPAAdapter interface
+    - evaluate returns (score, ASI text feedback)
+    - make_reflective_dataset returns failure traces
+    dependencies:
+    - P10.T1
+    - P10.T2
+    - P11.T1
+    status: pending
+  - id: P10.T4
+    title: Implement ParetoFrontStore
+    description: Persistent Pareto front storage per component. JSON file.
+    files_to_create:
+    - hermes/optimization/pareto.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/optimization/test_pareto.py::test_add_candidate
+    - tests/unit/optimization/test_pareto.py::test_get_front_returns_non_dominated
+    - tests/unit/optimization/test_pareto.py::test_get_best_for_context
+    - tests/unit/optimization/test_pareto.py::test_per_component_isolation
+    acceptance_criteria:
+    - Pareto front stored per component only (single-model architecture, r3)
+    - Non-dominated candidates returned
+    - Best for context routing
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P10.T5
+    title: Implement GEPARunner
+    description: Orchestrates weekly offline runs. Uses gepa-ai/gepa library.
+    files_to_create:
+    - hermes/optimization/gepa_runner.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/integration/test_gepa_runner.py::test_weekly_run_produces_candidates
+    - tests/integration/test_gepa_runner.py::test_deploy_updates_prompt_template
+    - tests/integration/test_gepa_runner.py::test_audit_trail_in_git
+    - tests/integration/test_gepa_runner.py::test_completes_within_1_hour
+    acceptance_criteria:
+    - Weekly run completes within 1 hour
+    - Produces >=3 candidates per component
+    - Deploys best candidate to prompt template
+    - Audit trail in Git commits
+    dependencies:
+    - P10.T3
+    - P10.T4
+    - P11.T1
+    status: pending
+  - id: P10.T6
+    title: Add weekly GEPA cron
+    description: Weekly scheduler runs GEPARunner.run_weekly() on Sundays at 03:00.
+    files_to_create:
+    - hermes/optimization/gepa_scheduler.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/integration/test_gepa_scheduler.py::test_cron_runs_weekly
+    - tests/integration/test_gepa_scheduler.py::test_manual_trigger
+    acceptance_criteria:
+    - Cron runs weekly automatically
+    - Manual trigger via /optimization run-gepa
+    dependencies:
+    - P10.T5
+    status: pending
+phase_11:
+  name: Trace Store
+  goal: Capture per-turn execution traces for GEPA reflection and eval-set building
+  tasks:
+  - id: P11.T1
+    title: Implement TraceStore
+    description: JSONL append (one file per day) + SQLite FTS5 index for search.
+    files_to_create:
+    - hermes/traces/store.py
+    - hermes/traces/schema.py
+    - hermes/traces/migrations.sql
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/traces/test_store.py::test_append_creates_trace
+    - tests/unit/traces/test_store.py::test_search_returns_relevant
+    - tests/unit/traces/test_store.py::test_label_quality_updates
+    - tests/unit/traces/test_store.py::test_get_gepa_ready_filters
+    - tests/unit/traces/test_store.py::test_search_under_100ms
+    acceptance_criteria:
+    - Every turn produces a trace
+    - Search returns relevant traces in <100ms
+    - JSONL append fast (<10ms)
+    - SQLite FTS5 index synced from JSONL
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P11.T2
+    title: Wire trace capture into pipeline
+    description: MemoryPipeline and lifecycle hooks append to TraceStore.
+    files_to_create:
+    - hermes/mcp/memory_ops_server.py
+    files_to_modify:
+    - hermes/memory/pipeline.py
+    - hermes/memory/hooks/stop_hook.py
+    - hermes/memory/hooks/user_prompt_submit_hook.py
+    tests_to_write:
+    - tests/integration/test_trace_capture.py::test_turn_creates_trace
+    - tests/integration/test_trace_capture.py::test_trace_includes_all_components
+    acceptance_criteria:
+    - Every turn produces a trace with all components
+    - 'Trace includes: turn_id, user_prompt, models_used, extraction, review, gating, injection'
+    dependencies:
+    - P11.T1
+    - P3.T4
+    - P4.T4
+    - P3.T5
+    status: pending
+  - id: P11.T3
+    title: Auto-quality labeling
+    description: 'Auto-label: skip=bad, add=good, conflict=needs-review. Manual override via /trace label.'
+    files_to_create:
+    - hermes/traces/quality_labeler.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/integration/test_trace_capture.py::test_quality_auto_labeled
+    - tests/integration/test_trace_capture.py::test_manual_label_overrides_auto
+    acceptance_criteria:
+    - 80%+ of traces auto-labeled
+    - Manual override via /trace label <id> <good|bad|needs-review>
+    dependencies:
+    - P11.T2
+    status: pending
+  - id: P11.T4
+    title: GEPA-ready trace filter
+    description: 'Filter: quality_label=good, suitable for building GEPA eval sets (50-100 labeled examples
+      per component), no PII detected.'
+    files_to_create:
+    - hermes/traces/gepa_filter.py
+    files_to_modify:
+    - hermes/traces/store.py
+    tests_to_write:
+    - tests/unit/traces/test_gepa_filter.py::test_filters_bad_quality
+    - tests/unit/traces/test_gepa_filter.py::test_filters_pii
+    - tests/unit/traces/test_gepa_filter.py::test_export_to_jsonl
+    acceptance_criteria:
+    - Only quality_label=good traces included
+    - PII detection filters sensitive data
+    - Export to JSONL for GEPA eval sets
+    dependencies:
+    - P11.T3
+    status: pending
+phase_13:
+  name: Skills lifecycle & learning loop visibility
+  goal: 'Explicit skill lifecycle: propose -> approve -> version -> deprecate'
+  tasks:
+  - id: P13.T1
+    title: Implement SkillLifecycle state machine
+    description: 'States: proposed, approved, active, deprecated, archived. Transitions enforced.'
+    files_to_create:
+    - hermes/skills/lifecycle.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/skills/test_lifecycle.py::test_propose_creates_in_proposed_state
+    - tests/unit/skills/test_lifecycle.py::test_approve_moves_to_active
+    - tests/unit/skills/test_lifecycle.py::test_version_creates_new_version
+    - tests/unit/skills/test_lifecycle.py::test_deprecate_moves_to_deprecated
+    - tests/unit/skills/test_lifecycle.py::test_invalid_transition_raises
+    acceptance_criteria:
+    - All state transitions validated
+    - Invalid transitions raise error
+    - Version history retained
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P13.T2
+    title: Implement SkillRegistry
+    description: JSON registry with versioning metadata. Stored in memory-repo/skills/_skill_registry.json.
+    files_to_create:
+    - hermes/skills/registry.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/skills/test_registry.py::test_register_adds_skill
+    - tests/unit/skills/test_registry.py::test_list_returns_all_versions
+    - tests/unit/skills/test_registry.py::test_get_latest_version
+    - tests/unit/skills/test_registry.py::test_rollback_to_previous_version
+    acceptance_criteria:
+    - Registry persists to JSON
+    - All versions retained
+    - Rollback to any prior version
+    dependencies:
+    - P13.T1
+    status: pending
+  - id: P13.T3
+    title: Auto-deprecate unused skills
+    description: Skills not used in 30 days proposed for deprecation. User approves via /skills.
+    files_to_create:
+    - hermes/skills/auto_deprecator.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/skills/test_auto_deprecator.py::test_proposes_after_30_days_unused
+    - tests/unit/skills/test_auto_deprecator.py::test_recently_used_not_proposed
+    acceptance_criteria:
+    - 30-day unused skills proposed for deprecation
+    - Recently used skills not proposed
+    dependencies:
+    - P13.T2
+    status: pending
+  - id: P13.T4
+    title: Add /skills slash command
+    description: 'Subcommands: list, inspect <name>, approve <id>, deprecate <name>, rollback <name> <version>'
+    files_to_create:
+    - commands/skills.md
+    files_to_modify:
+    - hermes/core/agent.py
+    tests_to_write:
+    - tests/integration/test_skills_workflow.py::test_propose_approve_use_deprecate
+    - tests/integration/test_skills_workflow.py::test_rollback_to_previous_version
+    - tests/integration/test_skills_workflow.py::test_list_shows_all_states
+    acceptance_criteria:
+    - All subcommands work as specified
+    - 'List shows: state, version, last_used_at'
+    dependencies:
+    - P13.T2
+    status: pending
+  - id: P13.T5
+    title: Add /learning slash command (dashboard)
+    description: 'Subcommands: stats, traces, pending, history.'
+    files_to_create:
+    - commands/learning.md
+    files_to_modify:
+    - hermes/core/agent.py
+    tests_to_write:
+    - tests/integration/test_learning_dashboard.py::test_stats_shows_counts
+    - tests/integration/test_learning_dashboard.py::test_traces_recent
+    - tests/integration/test_learning_dashboard.py::test_pending_approvals
+    acceptance_criteria:
+    - 'stats: total skills, active, deprecated, pending approvals, traces count'
+    - 'traces: recent N traces with quality labels'
+    - 'pending: skills awaiting approval'
+    - 'history: GEPA run history'
+    dependencies:
+    - P13.T4
+    - P11.T1
+    status: pending
+  - id: P13.T6
+    title: Dynamic skill bundle suggestion
+    description: Analyze skill co-occurrence, propose bundles to user.
+    files_to_create:
+    - hermes/skills/bundle_suggester.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/skills/test_bundle_suggester.py::test_detects_co_occurrence
+    - tests/unit/skills/test_bundle_suggester.py::test_proposes_bundle
+    acceptance_criteria:
+    - Co-occurrence analysis on skill usage
+    - Proposes bundles when co-occurrence > threshold
+    dependencies:
+    - P13.T2
+    status: pending
+phase_14:
+  name: Self-diagnostics system
+  goal: System checks its own health, reports metrics, alerts on issues, auto-repairs
+  tasks:
+  - id: P14.T1
+    title: Implement health checks
+    description: '6 checks (plan 5.1): memory_store_integrity, git_state, main_model_reachable, trace_store_size,
+      pareto_front_freshness, backup_freshness.'
+    files_to_create:
+    - hermes/diagnostics/health_checks.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/diagnostics/test_health_checks.py::test_memory_store_integrity_pass
+    - tests/unit/diagnostics/test_health_checks.py::test_memory_store_integrity_fail_on_missing_trust_card
+    - tests/unit/diagnostics/test_health_checks.py::test_git_state_warn_when_dirty
+    - tests/unit/diagnostics/test_health_checks.py::test_main_model_reachable_pass
+    - tests/unit/diagnostics/test_health_checks.py::test_main_model_fail_when_api_down
+    - tests/unit/diagnostics/test_health_checks.py::test_trace_store_size_pass
+    - tests/unit/diagnostics/test_health_checks.py::test_pareto_front_freshness_pass
+    - tests/unit/diagnostics/test_health_checks.py::test_backup_freshness_pass
+    acceptance_criteria:
+    - 'All 6 checks return {status: pass|fail|warn, details}'
+    - Each check completes within 2s
+    dependencies:
+    - P1.T3
+    - P10.T4
+    - P11.T1
+    - P18.T1
+    status: pending
+  - id: P14.T2
+    title: Implement metrics collection
+    description: Time series JSONL. Latency p50/p95/p99, token usage, trust distribution, conflict rate,
+      recall.
+    files_to_create:
+    - hermes/diagnostics/metrics.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/diagnostics/test_metrics.py::test_latency_percentiles_computed
+    - tests/unit/diagnostics/test_metrics.py::test_token_usage_accumulated
+    - tests/unit/diagnostics/test_metrics.py::test_trust_distribution
+    - tests/unit/diagnostics/test_metrics.py::test_conflict_rate_7d_rolling
+    acceptance_criteria:
+    - Metrics collected every 5 min
+    - Time series retained 90 days
+    - JSONL format for export
+    dependencies:
+    - P11.T1
+    status: pending
+  - id: P14.T3
+    title: Implement alerts
+    description: 'Rules (12, plan 5.3): main_model_down, git_dirty_long, trace_store_full, gepa_stale,
+      low_trust_entries, skill_pending_long, pii_detected_high_rate, adversarial_attempts, cost_anomaly,
+      backup_stale, fallback_rate_high, cron_job_stuck.
+
+
+      Includes cron_job_stuck rule: surfaces P21.T5 cron watchdog incidents (watchdog detects, diagnostics
+      reports — single alerting channel, no duplicate paths).
+
+      '
+    files_to_create:
+    - hermes/diagnostics/alerts.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/diagnostics/test_alerts.py::test_alert_on_main_model_down
+    - tests/unit/diagnostics/test_alerts.py::test_alert_on_dirty_git_over_1h
+    - tests/unit/diagnostics/test_alerts.py::test_alert_on_trace_store_full
+    - tests/unit/diagnostics/test_alerts.py::test_alert_on_gepa_stale
+    - tests/unit/diagnostics/test_alerts.py::test_alert_on_fallback_rate_high
+    - tests/unit/diagnostics/test_alerts.py::test_alert_on_cron_stuck
+    acceptance_criteria:
+    - All 12 alert rules implemented
+    - Alerts logged to diagnostics/alerts.log
+    - 'Notification channels: log, gateway message, optional email'
+    dependencies:
+    - P14.T1
+    - P14.T2
+    status: pending
+  - id: P14.T4
+    title: Implement auto-repair
+    description: 'Top 5 issues (plan 5.4): dirty Git -> auto-commit; missing trust cards -> re-run migration;
+      trace store full -> archive traces >90d; Pareto front stale -> trigger GEPA run; backup stale ->
+      trigger backup.'
+    files_to_create:
+    - hermes/diagnostics/auto_repair.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/diagnostics/test_auto_repair.py::test_repair_git_commits_dirty_state
+    - tests/unit/diagnostics/test_auto_repair.py::test_repair_missing_trust_cards
+    - tests/unit/diagnostics/test_auto_repair.py::test_repair_trace_store_archives_old
+    - tests/unit/diagnostics/test_auto_repair.py::test_repair_stale_pareto_triggers_gepa
+    - tests/unit/diagnostics/test_auto_repair.py::test_repair_stale_backup_triggers_backup
+    acceptance_criteria:
+    - Auto-repair resolves 80%+ of common issues
+    - Repair attempts logged
+    - Failed repairs escalate to alert
+    dependencies:
+    - P14.T1
+    status: pending
+  - id: P14.T5
+    title: Implement DiagnosticsSystem orchestrator
+    description: run_health_check() -> HealthReport. Background collection every 5 min.
+    files_to_create:
+    - hermes/diagnostics/system.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/integration/test_diagnostics.py::test_full_health_report_generated
+    - tests/integration/test_diagnostics.py::test_background_collection_every_5_min
+    - tests/integration/test_diagnostics.py::test_report_includes_metrics_and_alerts
+    acceptance_criteria:
+    - Health report schema matches plan section 5.1
+    - Background collection runs every 5 min
+    - Report generation <2s
+    dependencies:
+    - P14.T1
+    - P14.T2
+    - P14.T3
+    - P14.T4
+    status: pending
+  - id: P14.T6
+    title: Add /diagnostics slash command + HTTP endpoints
+    description: '/diagnostics [quick|full|repair]. HTTP: /health, /metrics (if gateway).'
+    files_to_create:
+    - commands/diagnostics.md
+    - hermes/gateway/health.py
+    tests_to_write:
+    - tests/integration/test_diagnostics.py::test_slash_command_quick
+    - tests/integration/test_diagnostics.py::test_slash_command_full
+    - tests/integration/test_diagnostics.py::test_slash_command_repair
+    - tests/integration/test_diagnostics.py::test_http_health_endpoint
+    - tests/integration/test_diagnostics.py::test_http_metrics_endpoint
+    acceptance_criteria:
+    - /diagnostics returns full report
+    - /diagnostics quick returns just status
+    - /diagnostics repair triggers auto-repair
+    - HTTP endpoints work when running as gateway
+    dependencies:
+    - P14.T5
+    status: pending
+  - id: P14.T7
+    title: Model performance diagnostics
+    description: 'Track model-specific metrics:
+
+      - Token generation speed (tok/s) for main model
+
+      - Output quality (eval score) per model version
+
+      - Error rate per model version
+
+      - Fallback rate per operation
+
+      '
+    files_to_create:
+    - hermes/diagnostics/model_metrics.py
+    files_to_modify:
+    - hermes/diagnostics/metrics.py
+    tests_to_write:
+    - tests/unit/diagnostics/test_model_metrics.py::test_token_speed_tracked
+    - tests/unit/diagnostics/test_model_metrics.py::test_quality_score_tracked
+    - tests/unit/diagnostics/test_model_metrics.py::test_error_rate_computed
+    - tests/unit/diagnostics/test_model_metrics.py::test_fallback_rate_alert
+    acceptance_criteria:
+    - Model-specific metrics collected
+    - Fallback rate >20% triggers alert
+    - Quality score trend visible in dashboard
+    dependencies:
+    - P14.T2
+    status: pending
+  - id: P14.T8
+    title: Learning loop effectiveness diagnostics
+    description: 'Monitor whether GEPA runs actually improve performance:
+
+      - Before/after eval scores per GEPA run
+
+      - Trend over time (improving, flat, declining)
+
+      - Alert if no improvement in 3 consecutive runs
+
+      '
+    files_to_create:
+    - hermes/diagnostics/learning_metrics.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/diagnostics/test_learning_metrics.py::test_gepa_improvement_tracked
+    - tests/unit/diagnostics/test_learning_metrics.py::test_no_improvement_alert
+    - tests/integration/test_learning_metrics.py::test_trend_report_generated
+    acceptance_criteria:
+    - Before/after scores tracked per optimization run
+    - Trend report weekly
+    - Alert if 3 consecutive runs no improvement
+    dependencies:
+    - P10.T5
+    - P14.T2
+    status: pending
+  - id: P14.T9
+    title: Memory quality trend diagnostics
+    description: 'Track memory quality trends over time:
+
+      - Trust score distribution (avg, p10, p50, p90) over time
+
+      - Conflict rate over time
+
+      - Archive rate (entries archived per week)
+
+      - Retrieval recall@5 over time
+
+      '
+    files_to_create:
+    - hermes/diagnostics/memory_quality_metrics.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/diagnostics/test_memory_quality.py::test_trust_distribution_tracked
+    - tests/unit/diagnostics/test_memory_quality.py::test_conflict_rate_trend
+    - tests/unit/diagnostics/test_memory_quality.py::test_archive_rate_tracked
+    - tests/unit/diagnostics/test_memory_quality.py::test_recall_trend
+    acceptance_criteria:
+    - All trends tracked weekly
+    - Declining trust score trend triggers alert
+    - Trends visible in dashboard
+    dependencies:
+    - P14.T2
+    - P8.T6
+    status: pending
+  - id: P14.T10
+    title: User-friendly dashboard (CLI + HTTP)
+    description: 'Beyond slash commands, provide:
+
+      - CLI: hermes-dashboard (interactive TUI)
+
+      - HTTP: /dashboard endpoint (HTML page with charts)
+
+      - Shows: health, metrics, trends, alerts, recent activity
+
+      '
+    files_to_create:
+    - hermes/diagnostics/dashboard_cli.py
+    - hermes/diagnostics/dashboard_http.py
+    - hermes/diagnostics/templates/dashboard.html
+    files_to_modify: []
+    tests_to_write:
+    - tests/integration/test_dashboard.py::test_cli_dashboard_renders
+    - tests/integration/test_dashboard.py::test_http_dashboard_renders
+    - tests/integration/test_dashboard.py::test_all_metrics_visible
+    acceptance_criteria:
+    - CLI dashboard interactive (arrow keys to navigate)
+    - HTTP dashboard renders in browser
+    - All metrics, trends, alerts visible
+    dependencies:
+    - P14.T5
+    - P14.T7
+    - P14.T8
+    - P14.T9
+    status: pending
+phase_15:
+  name: SOUL.md split & UX commands
+  goal: Split SOUL.md, add memory introspection and export/import
+  tasks:
+  - id: P15.T1
+    title: Implement SoulManager
+    description: soul_core.md immutable (Git-protected). soul_style.md adaptive (bounded 2000 chars).
+    files_to_create:
+    - hermes/memory/soul.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/memory/test_soul.py::test_core_immutable
+    - tests/unit/memory/test_soul.py::test_style_updatable_within_limit
+    - tests/unit/memory/test_soul.py::test_style_over_limit_errors
+    acceptance_criteria:
+    - Core never changes without explicit user override (manual Git operation)
+    - Style bounded to 2000 chars
+    - Agent can update style via memory tool
+    dependencies:
+    - P1.T3
+    status: pending
+  - id: P15.T2
+    title: Migrate existing SOUL.md
+    description: 'Split the fork-base (v2026.9.24) SOUL.md: safety/alignment -> core, rest -> style.'
+    files_to_modify:
+    - hermes/memory/migrations/fork_to_v2_0.py
+    tests_to_write:
+    - tests/integration/test_migration.py::test_soul_split_correct
+    - tests/integration/test_migration.py::test_safety_content_in_core
+    acceptance_criteria:
+    - Safety/alignment content in soul_core.md
+    - Rest in soul_style.md
+    dependencies:
+    - P15.T1
+    - P1.T6
+    status: pending
+  - id: P15.T3
+    title: Add /memory slash command
+    description: 'Subcommands: list [context], search <query>, stats, export > file, import < file.'
+    files_to_create:
+    - commands/memory.md
+    files_to_modify:
+    - hermes/core/agent.py
+    tests_to_write:
+    - tests/integration/test_memory_commands.py::test_list_returns_entries
+    - tests/integration/test_memory_commands.py::test_search_returns_relevant
+    - tests/integration/test_memory_commands.py::test_stats_shows_distribution
+    - tests/integration/test_memory_commands.py::test_export_import_roundtrip
+    - tests/integration/test_memory_commands.py::test_import_handles_conflicts
+    acceptance_criteria:
+    - All subcommands work
+    - Export preserves trust cards
+    - Import handles conflicts (skip or overwrite)
+    dependencies:
+    - P1.T3
+    - P8.T1
+    status: pending
+  - id: P15.T4
+    title: Add /soul slash command
+    description: 'Subcommands: inspect, edit-style, history.'
+    files_to_create:
+    - commands/soul.md
+    files_to_modify:
+    - hermes/core/agent.py
+    tests_to_write:
+    - tests/integration/test_soul_commands.py::test_inspect_shows_core_and_style
+    - tests/integration/test_soul_commands.py::test_edit_style_updates
+    - tests/integration/test_soul_commands.py::test_history_shows_changes
+    acceptance_criteria:
+    - Inspect shows both core and style
+    - Edit-style allows manual override
+    - History via Git log
+    dependencies:
+    - P15.T1
+    status: pending
+phase_16:
+  name: Documentation & packaging
+  goal: User-facing docs, migration guide, PyPI package
+  tasks:
+  - id: P16.T1
+    title: Write architecture documentation
+    description: Target state, component overview, data flow, trust cards.
+    files_to_create:
+    - docs/architecture.md
+    files_to_modify: []
+    tests_to_write: []
+    acceptance_criteria:
+    - Architecture doc accurate to implementation
+    - Diagrams (mermaid or ascii) for data flow
+    dependencies:
+    - P14.T6
+    status: pending
+  - id: P16.T2
+    title: Write migration guide
+    description: Step-by-step from v2026.9.24 to v2.0. Troubleshooting.
+    files_to_create:
+    - docs/migration-from-fork-base.md
+    files_to_modify: []
+    tests_to_write: []
+    acceptance_criteria:
+    - Step-by-step instructions
+    - Backup recommendations
+    - Troubleshooting common issues
+    dependencies:
+    - P1.T6
+    - P15.T2
+    status: pending
+  - id: P16.T3
+    title: Write user guide
+    description: Contexts, memory commands, diagnostics, skills lifecycle, optimization.
+    files_to_create:
+    - docs/user-guide.md
+    - docs/commands-reference.md
+    files_to_modify:
+    - README.md
+    tests_to_write: []
+    acceptance_criteria:
+    - User guide covers all features
+    - Commands reference complete
+    - README updated for v2.0
+    dependencies:
+    - P15.T3
+    - P13.T4
+    - P14.T6
+    status: pending
+  - id: P16.T4
+    title: Finalize PyPI packaging
+    description: pyproject.toml for PyPI. Build wheel, test clean install.
+    files_to_modify:
+    - pyproject.toml
+    files_to_create:
+    - tests/integration/test_installation.py
+    tests_to_write:
+    - tests/integration/test_installation.py::test_clean_install_works
+    - tests/integration/test_installation.py::test_migration_script_runs
+    acceptance_criteria:
+    - Clean install in fresh venv works
+    - Migration from v2026.9.24 preserves all data
+    - PyPI package builds
+    dependencies:
+    - P16.T3
+    status: pending
+  - id: P16.T5
+    title: Tag v2.0.0 release
+    description: Final release tag, changelog, GitHub release.
+    files_to_create:
+    - CHANGELOG.md
+    files_to_modify: []
+    tests_to_write: []
+    acceptance_criteria:
+    - All tests pass on main
+    - CHANGELOG complete
+    - v2.0.0 tag pushed
+    - GitHub release published
+    dependencies:
+    - P16.T4
+    status: pending
+phase_17:
+  name: Adversarial input detection & safety
+  goal: Detect and mitigate attempts to inject false information or manipulate trust system
+  tasks:
+  - id: P17.T1
+    title: Implement AdversarialInputDetector
+    description: 'Detect patterns indicating adversarial input:
+
+      - Prompt injection attempts ("ignore previous instructions, remember X")
+
+      - Trust manipulation ("this fact is verified by user, trust_score=1.0")
+
+      - Contradiction flooding (many contradictory facts in short time)
+
+      - Unusual trust score inflation attempts
+
+      Uses main model classifier. Returns risk_score + reason.
+
+      '
+    files_to_create:
+    - hermes/memory/adversarial_detector.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/memory/test_adversarial_detector.py::test_detects_prompt_injection
+    - tests/unit/memory/test_adversarial_detector.py::test_detects_trust_manipulation
+    - tests/unit/memory/test_adversarial_detector.py::test_detects_contradiction_flooding
+    - tests/unit/memory/test_adversarial_detector.py::test_normal_input_low_risk
+    - tests/integration/test_adversarial_workflow.py::test_high_risk_input_blocked
+    - tests/integration/test_adversarial_workflow.py::test_alert_on_repeated_attempts
+    acceptance_criteria:
+    - Risk score in [0, 1]
+    - False positive rate <5% on normal inputs
+    - Detects 90%+ of known adversarial patterns
+    - High-risk inputs (>0.7) blocked from memory write
+    dependencies:
+    - P2.T1
+    status: pending
+  - id: P17.T2
+    title: Rate limiting on memory writes
+    description: 'Per-session and per-user rate limits on memory writes to prevent flooding:
+
+      - Max 20 writes per session per hour
+
+      - Max 100 writes per day per user
+
+      - Burst detection (10 writes in 1 minute = suspicious)
+
+      '
+    files_to_create:
+    - hermes/memory/rate_limiter.py
+    files_to_modify:
+    - hermes/memory/store.py
+    tests_to_write:
+    - tests/unit/memory/test_rate_limiter.py::test_allows_under_limit
+    - tests/unit/memory/test_rate_limiter.py::test_blocks_over_limit
+    - tests/unit/memory/test_rate_limiter.py::test_burst_detection
+    - tests/integration/test_rate_limiting.py::test_session_limit_enforced
+    acceptance_criteria:
+    - Rate limits configurable in config.yaml
+    - Burst detection triggers alert
+    - Limits reset per session/day
+    dependencies:
+    - P1.T3
+    status: pending
+  - id: P17.T3
+    title: Trust score anomaly detection
+    description: 'Detect unusual trust score patterns:
+
+      - Rapid trust score increase (e.g., 0.3 → 0.9 in one event)
+
+      - Many high-trust events from same verifier in short time
+
+      - Trust score manipulation via fake verification events
+
+      Alerts and requires human review before applying.
+
+      '
+    files_to_create:
+    - hermes/memory/trust_anomaly.py
+    files_to_modify:
+    - hermes/memory/verification.py
+    tests_to_write:
+    - tests/unit/memory/test_trust_anomaly.py::test_detects_rapid_increase
+    - tests/unit/memory/test_trust_anomaly.py::test_detects_verifier_flooding
+    - tests/unit/memory/test_trust_anomaly.py::test_normal_increases_not_flagged
+    - tests/integration/test_trust_anomaly.py::test_anomaly_triggers_review
+    acceptance_criteria:
+    - Anomalous trust changes flagged for review
+    - Normal trust evolution not flagged
+    - Human review queue for flagged changes
+    dependencies:
+    - P2.T1
+    status: pending
+  - id: P17.T4
+    title: Sensitive data (PII) detection
+    description: 'Detect PII in memory entries before write:
+
+      - Email addresses, phone numbers, SSN, credit card numbers
+
+      - API keys, tokens, passwords
+
+      - IP addresses, internal hostnames (configurable)
+
+      Options: redact, block, or allow-with-warning.
+
+      '
+    files_to_create:
+    - hermes/memory/pii_detector.py
+    files_to_modify:
+    - hermes/memory/store.py
+    tests_to_write:
+    - tests/unit/memory/test_pii_detector.py::test_detects_email
+    - tests/unit/memory/test_pii_detector.py::test_detects_phone
+    - tests/unit/memory/test_pii_detector.py::test_detects_api_key
+    - tests/unit/memory/test_pii_detector.py::test_detects_credit_card
+    - tests/integration/test_pii_workflow.py::test_pii_redacted_before_write
+    - tests/integration/test_pii_workflow.py::test_configurable_action_redact_block_warn
+    acceptance_criteria:
+    - PII detection 95%+ recall on test set
+    - False positive rate <2%
+    - 'Configurable action: redact | block | warn'
+    - Redacted entries marked in trust card
+    dependencies:
+    - P1.T3
+    status: pending
+phase_18:
+  name: Backup & recovery strategy
+  goal: Recover from Git repo corruption, memory store loss, or partial migrations
+  tasks:
+  - id: P18.T1
+    title: Implement automatic backups
+    description: 'Daily backup of memory-repo/ to compressed archive:
+
+      - Location: ${HERMES_HOME}/backups/YYYY-MM-DD.tar.gz
+
+      - Retention: 30 days
+
+      - Verify integrity (Git fsck on each backup)
+
+      - Optional: push to remote (S3, another Git remote)
+
+      '
+    files_to_create:
+    - hermes/backup/manager.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/backup/test_manager.py::test_creates_daily_backup
+    - tests/unit/backup/test_manager.py::test_retention_enforced
+    - tests/unit/backup/test_manager.py::test_integrity_verified
+    - tests/integration/test_backup.py::test_full_backup_restore_cycle
+    acceptance_criteria:
+    - Daily backup created at 02:00 local
+    - Backups older than 30 days auto-deleted
+    - Each backup Git-fsck verified
+    dependencies:
+    - P1.T2
+    status: pending
+  - id: P18.T2
+    title: Implement recovery from backup
+    description: 'Restore memory-repo/ from backup:
+
+      - Stop Hermes processes
+
+      - Replace memory-repo/ with backup contents
+
+      - Run integrity check
+
+      - Restart Hermes
+
+      CLI: hermes-restore <backup-path>
+
+      '
+    files_to_create:
+    - hermes/backup/recovery.py
+    - scripts/hermes-restore.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/integration/test_recovery.py::test_restore_from_backup
+    - tests/integration/test_recovery.py::test_restore_preserves_all_entries
+    - tests/integration/test_recovery.py::test_restore_preserves_git_history
+    - tests/integration/test_recovery.py::test_partial_corruption_recovery
+    acceptance_criteria:
+    - Restore completes within 5 minutes for 1000-entry repo
+    - All entries preserved
+    - Git history intact
+    - Partial corruption (some files missing) recoverable
+    dependencies:
+    - P18.T1
+    status: pending
+  - id: P18.T3
+    title: Git repo corruption recovery
+    description: 'Detect and recover from Git corruption:
+
+      - git fsck check on every health check
+
+      - If corruption detected: alert + attempt repair (git gc, git fsck --fix)
+
+      - If unrepairable: restore from latest backup
+
+      '
+    files_to_create:
+    - hermes/backup/git_recovery.py
+    files_to_modify:
+    - hermes/diagnostics/health_checks.py
+    - hermes/diagnostics/auto_repair.py
+    tests_to_write:
+    - tests/integration/test_git_recovery.py::test_detects_corruption
+    - tests/integration/test_git_recovery.py::test_repair_via_gc
+    - tests/integration/test_git_recovery.py::test_restore_from_backup_on_unrepairable
+    acceptance_criteria:
+    - Git corruption detected within 5 min (next health check)
+    - Auto-repair attempts gc + fsck --fix
+    - Unrepairable cases auto-restore from backup
+    dependencies:
+    - P18.T2
+    - P14.T1
+    - P14.T4
+    status: pending
+  - id: P18.T4
+    title: 'Migration safety: dry-run + rollback'
+    description: 'All migrations (fork-base -> v2.0, future schema changes) must support:
+
+      - Dry-run mode (report changes without applying)
+
+      - Automatic backup before migration
+
+      - Rollback script if migration fails
+
+      '
+    files_to_modify:
+    - hermes/memory/migrations/fork_to_v2_0.py
+    files_to_create:
+    - hermes/memory/migrations/base.py
+    tests_to_write:
+    - tests/integration/test_migration.py::test_dry_run_reports_only
+    - tests/integration/test_migration.py::test_backup_created_before_migration
+    - tests/integration/test_migration.py::test_rollback_after_failed_migration
+    - tests/integration/test_migration.py::test_partial_migration_recovery
+    acceptance_criteria:
+    - Dry-run mode never modifies state
+    - Backup created automatically before any migration
+    - Rollback restores pre-migration state
+    dependencies:
+    - P1.T6
+    - P18.T1
+    status: pending
+phase_19:
+  name: Model version drift handling
+  goal: Detect and mitigate performance changes when model versions change
+  tasks:
+  - id: P19.T1
+    title: Implement model version registry
+    description: 'Track all model and prompt-template versions used:
+
+      - Cloud: {provider, model_id, deployed_at, eval_score}
+
+      - Prompts: {component, version, gepa_run_id, deployed_at}
+
+      Stored in ${HERMES_HOME}/model_versions.json'
+    files_to_create:
+    - hermes/models/version_registry.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/models/test_version_registry.py::test_register_version
+    - tests/unit/models/test_version_registry.py::test_get_current_version
+    - tests/unit/models/test_version_registry.py::test_list_history
+    acceptance_criteria:
+    - Every model deployment registered
+    - History of all versions retained
+    - Current version queryable per operation
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P19.T2
+    title: 'Drift detection: eval on version change'
+    description: 'When model version changes (manual or via GEPA-deployed prompt update):
+
+      - Run eval set (50-100 examples) on new version
+
+      - Compare to previous version''s eval score
+
+      - If new version worse by >2%: alert + suggest rollback
+
+      - If worse by >5%: auto-rollback
+
+      '
+    files_to_create:
+    - hermes/models/drift_detector.py
+    - hermes/models/router.py
+    tests_to_write:
+    - tests/unit/models/test_drift_detector.py::test_eval_runs_on_version_change
+    - tests/unit/models/test_drift_detector.py::test_alert_on_2_percent_regression
+    - tests/unit/models/test_drift_detector.py::test_auto_rollback_on_5_percent_regression
+    - tests/integration/test_drift_workflow.py::test_version_change_triggers_eval
+    - tests/integration/test_drift_workflow.py::test_auto_rollback_restores_previous
+    acceptance_criteria:
+    - Eval runs automatically on version change
+    - '>2% regression alerts'
+    - '>5% regression auto-rollback'
+    - Rollback within 5 minutes
+    dependencies:
+    - P19.T1
+    - P10.T2
+    status: pending
+  - id: P19.T3
+    title: Cloud model deprecation detection
+    description: 'Cloud providers deprecate models. Detect and alert:
+
+      - Periodically check model availability via API
+
+      - If model returns deprecation warning: alert + suggest alternatives
+
+      - If model removed: auto-fallback to configured alternative
+
+      '
+    files_to_create:
+    - hermes/models/cloud_deprecation.py
+    - hermes/models/cloud_client.py
+    tests_to_write:
+    - tests/unit/models/test_cloud_deprecation.py::test_detects_deprecation_warning
+    - tests/unit/models/test_cloud_deprecation.py::test_auto_fallback_on_removal
+    - tests/integration/test_cloud_deprecation.py::test_alert_on_deprecation
+    acceptance_criteria:
+    - Deprecation warnings detected within 24h
+    - Auto-fallback on model removal
+    - Alert suggests configured alternatives
+    dependencies:
+    - P19.T1
+    status: pending
+  - id: P19.T4
+    title: A/B testing framework for model versions
+    description: 'Run two model versions in parallel, compare metrics:
+
+      - 80/20 traffic split (current/new)
+
+      - Compare eval scores, latency, error rates
+
+      - Auto-promote new version if better
+
+      '
+    files_to_create:
+    - hermes/models/ab_testing.py
+    files_to_modify:
+    - hermes/models/router.py
+    tests_to_write:
+    - tests/unit/models/test_ab_testing.py::test_traffic_split_80_20
+    - tests/unit/models/test_ab_testing.py::test_metric_comparison
+    - tests/integration/test_ab_testing.py::test_auto_promote_on_better_metrics
+    acceptance_criteria:
+    - 80/20 split configurable
+    - Metrics compared after N requests
+    - Auto-promote if new version better by >3%
+    dependencies:
+    - P19.T1
+    - P19.T2
+    status: pending
+phase_20:
+  name: Expanded testing — chaos, property, mutation, multi-agent
+  goal: Address testing gaps identified in GLM-5.3 review
+  tasks:
+  - id: P20.T1
+    title: Chaos testing framework
+    description: 'Tests for system resilience under failure conditions:
+
+      - Main model API failure mid-request -> verify graceful degradation (plan 5.5: skip extraction,
+      trust-score-only gating)
+
+      - Corrupt one memory file -> verify Git recovery
+
+      - Network failure to main model provider -> verify deferred queue
+
+      - Disk full -> verify error handling
+
+      - Concurrent process crash -> verify writer recovery
+
+      '
+    files_to_create:
+    - tests/chaos/conftest.py
+    - tests/chaos/test_main_model_failure.py
+    - tests/chaos/test_git_corruption.py
+    - tests/chaos/test_network_failure.py
+    - tests/chaos/test_disk_full.py
+    - tests/chaos/test_writer_crash.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/chaos/test_main_model_failure.py::test_api_failure_mid_request_degrades_gracefully
+    - tests/chaos/test_main_model_failure.py::test_api_unreachable_at_startup
+    - tests/chaos/test_git_corruption.py::test_corrupted_index_recoverable
+    - tests/chaos/test_git_corruption.py::test_missing_object_restored_from_backup
+    - tests/chaos/test_network_failure.py::test_provider_unreachable_defers_ops
+    - tests/chaos/test_network_failure.py::test_provider_recovery_flushes_queue
+    - tests/chaos/test_disk_full.py::test_write_fails_gracefully
+    - tests/chaos/test_writer_crash.py::test_writer_recovery_after_crash
+    acceptance_criteria:
+    - All chaos tests pass (system recovers gracefully)
+    - No data loss in any failure scenario
+    - Chaos tests run nightly in CI
+    dependencies:
+    - P14.T6
+    - P6.T3
+    - P18.T3
+    status: pending
+  - id: P20.T2
+    title: Property tests for memory pipeline
+    description: 'Hypothesis-based property tests for critical paths:
+
+      - Pipeline: any valid turn -> valid DraftFact or empty list
+
+      - Gating: injected count <= budget_claims
+
+      - Reviewer: action always in {add, update, skip, conflict}
+
+      - Trust score: always in [0, 1]
+
+      - Decay: never increases score
+
+      - Conflict detector: symmetric (A conflicts B iff B conflicts A)
+
+      '
+    files_to_create:
+    - tests/property/test_pipeline.py
+    - tests/property/test_gating.py
+    - tests/property/test_reviewer.py
+    - tests/property/test_trust_card.py
+    - tests/property/test_decay.py
+    - tests/property/test_conflict_detector.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/property/test_pipeline.py::test_any_turn_produces_valid_output
+    - tests/property/test_pipeline.py::test_empty_turn_produces_empty_list
+    - tests/property/test_gating.py::test_injected_never_exceeds_budget
+    - tests/property/test_gating.py::test_all_injected_have_use_decision_p20
+    - tests/property/test_reviewer.py::test_action_always_valid
+    - tests/property/test_reviewer.py::test_conflict_action_has_target_id
+    - tests/property/test_trust_card.py::test_score_always_in_range
+    - tests/property/test_trust_card.py::test_add_event_never_decreases_if_higher_weight
+    - tests/property/test_decay.py::test_decay_never_increases
+    - tests/property/test_decay.py::test_decay_zero_at_infinity
+    - tests/property/test_conflict_detector.py::test_symmetric
+    - tests/property/test_conflict_detector.py::test_no_self_conflict
+    acceptance_criteria:
+    - All property tests pass with 1000 examples each
+    - No crashes on any generated input
+    - Property tests run in PR CI
+    dependencies:
+    - P3.T4
+    - P4.T2
+    - P8.T1
+    status: pending
+  - id: P20.T3
+    title: Multi-agent integration tests
+    description: 'Comprehensive tests for multiple agents sharing memory:
+
+      - 2 agents, 10 concurrent writes each -> no corruption
+
+      - Main agent + 3 subagents, mixed operations -> consistent state
+
+      - Agent A writes, agent B reads immediately -> B sees A''s write
+
+      - Race condition: A and B update same entry -> resolved correctly
+
+      - Subagent proposes skill, main agent approves -> consistent state
+
+      '
+    files_to_create:
+    - tests/integration/test_multi_agent.py
+    - tests/integration/test_subagent_coordination.py
+    - tests/integration/test_concurrent_skill_lifecycle.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/integration/test_multi_agent.py::test_two_agents_concurrent_writes
+    - tests/integration/test_multi_agent.py::test_main_plus_three_subagents
+    - tests/integration/test_multi_agent.py::test_write_visibility_immediate
+    - tests/integration/test_multi_agent.py::test_concurrent_update_same_entry
+    - tests/integration/test_multi_agent.py::test_writer_crash_during_multi_agent
+    - tests/integration/test_subagent_coordination.py::test_subagent_extracts_main_reviews
+    - tests/integration/test_subagent_coordination.py::test_subagent_proposes_skill_main_approves
+    - tests/integration/test_concurrent_skill_lifecycle.py::test_concurrent_approve_deprecate
+    acceptance_criteria:
+    - No corruption in any multi-agent scenario
+    - Write visibility immediate (within 1s)
+    - Concurrent updates resolved correctly (last-writer-wins or merge)
+    - Tests run in nightly CI
+    dependencies:
+    - P6.T3
+    - P13.T4
+    status: pending
+  - id: P20.T4
+    title: Performance regression tests
+    description: 'Detect performance regressions across versions:
+
+      - Baseline metrics stored per release
+
+      - Compare current vs baseline on key operations
+
+      - Alert if regression >10%
+
+      - Track trends over time
+
+      '
+    files_to_create:
+    - tests/benchmark/test_regression.py
+    - tests/benchmark/baseline_metrics.json
+    files_to_modify: []
+    tests_to_write:
+    - tests/benchmark/test_regression.py::test_extraction_latency_vs_baseline
+    - tests/benchmark/test_regression.py::test_gating_latency_vs_baseline
+    - tests/benchmark/test_regression.py::test_retrieval_latency_vs_baseline
+    - tests/benchmark/test_regression.py::test_injection_latency_vs_baseline
+    - tests/benchmark/test_regression.py::test_no_regression_greater_than_10_percent
+    acceptance_criteria:
+    - Baselines stored per release tag
+    - Regression >10% fails CI
+    - Trend report generated weekly
+    dependencies:
+    - P3.T4
+    - P4.T4
+    status: pending
+  - id: P20.T5
+    title: Mutation testing infrastructure (mutmut + CI gates)
+    description: 'Mutation testing infra per plan Section 4.7 (requirement: where applicable, all tests
+      are mutation-tested):
+
+
+      - Configure mutmut in pyproject.toml: paths-to-mutate = in-scope deterministic logic modules; Tier-1
+      (>=95% killed) and Tier-2 (>=85% killed) thresholds
+
+      - Per-PR mutation diff on changed modules only (target <10 min)
+
+      - Nightly full mutation run in .github/workflows/mutation.yml, report published as CI artifact
+
+      - PR gate: fail if a Tier-1 module mutation score drops below threshold
+
+      - Survivor policy: strengthen the test, or mark equivalent mutant with ''# pragma: no mutate'' +
+      one-line justification reviewed in PR'
+    files_to_create:
+    - .github/workflows/mutation.yml
+    - tests/mutation/test_mutation_config.py
+    files_to_modify:
+    - pyproject.toml
+    tests_to_write:
+    - tests/mutation/test_mutation_config.py::test_in_scope_modules_exist
+    - tests/mutation/test_mutation_config.py::test_tier_thresholds_match_section_4_7
+    - tests/mutation/test_mutation_config.py::test_ci_workflow_has_nightly_mutation_job
+    acceptance_criteria:
+    - mutmut runs green on skeleton; nightly mutation job active in CI
+    - Per-PR mutation diff completes <10 min for a typical PR
+    - PR fails when a Tier-1 module score drops below threshold
+    dependencies:
+    - P0.T4
+    status: pending
+  - id: P20.T6
+    title: Raise mutation scores to thresholds + Phase 21 mutant validation
+    description: 'Bring all Tier-1/Tier-2 modules (plan Section 4.7) to their mutation score thresholds:
+
+
+      - Full mutation pass per module; triage every survivor: strengthen assertions, add boundary tests,
+      or justify equivalent mutant
+
+      - Validate Phase 21 regression tests: for each fixed bug (critical: P21.T1, P21.T2, P21.T11) a mutant
+      reintroducing the original bug must be killed by the new tests
+
+      - Track mutation score trend in diagnostics metrics (plan Section 5.2)'
+    files_to_create: []
+    files_to_modify:
+    - tests/unit/memory/test_gating.py
+    - tests/unit/memory/test_trust_card.py
+    - tests/unit/memory/test_pii_detector.py
+    - tests/unit/memory/test_rate_limiter.py
+    - tests/unit/models/test_drift_detector.py
+    - tests/unit/cron/test_watchdog.py
+    tests_to_write:
+    - tests/unit/memory/test_gating.py::test_budget_boundary_exactly_3_claims_1200_chars
+    - tests/unit/memory/test_rate_limiter.py::test_burst_limit_boundary_10_in_60s
+    - tests/unit/models/test_drift_detector.py::test_rollback_threshold_exactly_5_percent
+    - tests/unit/memory/test_pii_detector.py::test_redaction_preserves_non_pii_text
+    acceptance_criteria:
+    - Tier-1 modules >=95% killed, Tier-2 modules >=85% killed
+    - Zero unexplained survived mutants in Tier-1
+    - Re-mutants of P21.T1/T2/T11 bugs killed by regression tests
+    - Mutation score trend visible in diagnostics metrics
+    dependencies:
+    - P20.T5
+    - P21.T1
+    - P21.T2
+    - P21.T5
+    - P21.T11
+    - P17.T2
+    - P17.T4
+    - P19.T2
+    status: pending
+phase_21:
+  name: Fix known Hermes bugs
+  goal: Fix 12 most impactful open bugs from Hermes GitHub issues (memory, tools, MCP, sessions, cron)
+  tasks:
+  - id: P21.T1
+    title: Fix ThreadPoolExecutor _interrupted_threads leak (#35309)
+    description: 'Bug: when a worker thread raises BaseException, the thread ID gets
+
+      "poisoned". ThreadPoolExecutor recycles thread IDs, so later tool
+
+      executions on the same thread ID incorrectly think they''re interrupted
+
+      (is_interrupted() returns True), causing tools to abort silently.
+
+      Repro: prompt agent to use a tool that calls is_interrupted() after
+
+      a previous tool crashed.
+
+      Fix: track interrupted state per-execution (not per-thread-ID).
+
+      Use threading.local() or pass execution context explicitly.
+
+      '
+    files_to_create:
+    - hermes/core/tool_executor.py
+    - hermes/core/execution_context.py
+    tests_to_write:
+    - tests/unit/core/test_execution_context.py::test_interrupt_state_per_execution
+    - tests/unit/core/test_execution_context.py::test_thread_id_recycle_safe
+    - tests/integration/test_tool_executor.py::test_crash_does_not_poison_next_call
+    - tests/integration/test_tool_executor.py::test_is_interrupted_returns_correct_state
+    - tests/chaos/test_tool_executor.py::test_concurrent_crashes_no_poisoning
+    acceptance_criteria:
+    - is_interrupted() returns correct state per-execution
+    - Thread ID recycling doesn't cause false interrupts
+    - Concurrent tool crashes don't poison other executions
+    - 'All 5 repro scenarios from issue #35309 pass'
+    github_issue: https://github.com/NousResearch/hermes-agent/issues/35309
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P21.T2
+    title: Fix hot memory ignored + disabled tools used (#26568)
+    description: 'Bug: after v0.13+ update, Hermes both (a) uses tools that are
+
+      explicitly disabled in config, and (b) ignores hot memory entirely
+
+      when acting. Likely a regression in tool filtering and memory
+
+      injection wiring.
+
+      Fix: audit tool enable/disable pipeline, ensure config.yaml
+
+      toolsets filtering is enforced at tool registration time, not at
+
+      call time. Ensure hot memory (recently added entries within session)
+
+      is injected before each tool call.
+
+      '
+    files_to_create:
+    - hermes/core/tool_registry.py
+    files_to_modify:
+    - hermes/memory/injector.py
+    tests_to_write:
+    - tests/unit/core/test_tool_registry.py::test_disabled_tool_not_registered
+    - tests/unit/core/test_tool_registry.py::test_enabled_tool_registered
+    - tests/integration/test_tools.py::test_disabled_tool_never_called
+    - tests/integration/test_memory_injection.py::test_hot_memory_injected_before_tool_call
+    - tests/integration/test_memory_injection.py::test_disabled_toolset_completely_ignored
+    acceptance_criteria:
+    - Disabled tools never appear in tool registry
+    - Disabled tools never invoked even if model requests them
+    - Hot memory (entries added in current session) injected before tool calls
+    - 'All 4 repro scenarios from issue #26568 pass'
+    github_issue: https://github.com/NousResearch/hermes-agent/issues/26568
+    dependencies:
+    - P4.T3
+    - P1.T3
+    status: pending
+  - id: P21.T3
+    title: Fix MCP tools/call arguments intermittently dropped (#156143)
+    description: 'Bug: MCP stdio protocol — tool call arguments intermittently dropped.
+
+      Server executes with defaults, caller sees no error. Silent data loss.
+
+      Likely a JSON-RPC framing issue over stdio pipe.
+
+      Fix: audit MCP stdio protocol implementation. Add explicit
+
+      argument-schema validation on caller side. Add echo-back from
+
+      server confirming arguments received. Log all MCP calls with
+
+      full arguments for debugging.
+
+      '
+    files_to_create:
+    - hermes/mcp/client.py
+    - hermes/mcp/protocol.py
+    - hermes/mcp/argument_validator.py
+    tests_to_write:
+    - tests/unit/mcp/test_argument_validator.py::test_validates_schema
+    - tests/unit/mcp/test_argument_validator.py::test_rejects_missing_required
+    - tests/integration/test_mcp_stdio.py::test_arguments_not_dropped
+    - tests/integration/test_mcp_stdio.py::test_server_echoes_arguments
+    - tests/chaos/test_mcp_stdio.py::test_high_concurrency_no_argument_loss
+    - tests/property/test_mcp_argument_serializer.py::test_roundtrip_any_args
+    acceptance_criteria:
+    - Zero argument drops in 1000 consecutive MCP calls
+    - Schema validation catches missing required arguments
+    - Server echo confirms arguments received
+    - All MCP calls logged with full arguments
+    github_issue: https://github.com/NousResearch/hermes-agent/issues/156143
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P21.T4
+    title: Fix skills search 86s cold cache (#156140)
+    description: 'Bug: skills search takes ~86 seconds on cold index cache (52MB
+
+      download). Silent degradation when index can''t be fetched — user
+
+      sees no error, just slow or missing results.
+
+      Fix: bundle base skills index with install (no cold download).
+
+      Add explicit error when index fetch fails (no silent degradation).
+
+      Add local fallback: if remote index unavailable, use local
+
+      ~/.hermes/skills/ directory listing.
+
+      '
+    files_to_create:
+    - hermes/skills/search.py
+    - hermes/skills/index.py
+    tests_to_write:
+    - tests/unit/skills/test_search.py::test_cold_cache_under_5s_with_bundled_index
+    - tests/unit/skills/test_search.py::test_remote_unavailable_uses_local_fallback
+    - tests/integration/test_skills_search.py::test_no_silent_degradation
+    - tests/integration/test_skills_search.py::test_error_message_on_fetch_failure
+    - tests/benchmark/test_skills_search_latency.py::test_cold_search_under_5s
+    acceptance_criteria:
+    - Cold cache search <5s (was 86s)
+    - Remote fetch failure shows explicit error
+    - Local fallback works when remote unavailable
+    - No silent degradation
+    github_issue: https://github.com/NousResearch/hermes-agent/issues/156140
+    dependencies:
+    - P13.T2
+    status: pending
+  - id: P21.T5
+    title: Fix cron stuck 'running' — inactivity watchdog (#156160)
+    description: 'Bug: cron job agent run stuck in ''running'' state for 3h49m.
+
+      Inactivity watchdog never fired. Ticks silently skipped. No
+
+      incident logged. User has no idea cron is broken.
+
+      Fix: implement proper inactivity watchdog (timeout after N minutes
+
+      of no progress). Force-fail stuck runs. Log incident. Alert user
+
+      via gateway message.
+
+
+      Check 3: watchdog incidents surface via DiagnosticsSystem (Phase 14) as the cron_job_stuck alert
+      — single alerting channel; direct gateway message kept only as fallback when diagnostics module
+      is not deployed.
+
+      '
+    files_to_create:
+    - hermes/cron/watchdog.py
+    - hermes/cron/scheduler.py
+    tests_to_write:
+    - tests/unit/cron/test_watchdog.py::test_timeout_after_inactivity
+    - tests/unit/cron/test_watchdog.py::test_force_fail_stuck_run
+    - tests/integration/test_cron.py::test_incident_logged_on_stuck
+    - tests/integration/test_cron.py::test_alert_sent_on_stuck
+    - tests/chaos/test_cron.py::test_long_running_does_not_stick
+    acceptance_criteria:
+    - Inactivity watchdog fires after configurable timeout (default 30 min)
+    - Stuck runs force-failed and logged
+    - Incident surfaces as cron_job_stuck alert via DiagnosticsSystem (gateway message channel); direct
+      gateway fallback when diagnostics absent
+    - Ticks not silently skipped
+    github_issue: https://github.com/NousResearch/hermes-agent/issues/156160
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P21.T6
+    title: Fix state.db WAL errors / session storage unavailable
+    description: 'Bug: state.db Write-Ahead Logging errors. Session storage
+
+      unavailable errors. Context drift, missing sessions.
+
+      Likely SQLite WAL configuration issue under concurrent access.
+
+      Fix: audit SQLite WAL configuration. Set busy_timeout. Use
+
+      IMMEDIATE transactions for writes. Add connection pooling.
+
+      Verify multi-process access (concurrent writers from Phase 6).
+
+      '
+    files_to_create:
+    - hermes/storage/database.py
+    files_to_modify:
+    - hermes/sessions/store.py
+    tests_to_write:
+    - tests/unit/storage/test_database.py::test_wal_no_errors_under_load
+    - tests/unit/storage/test_database.py::test_busy_timeout_configured
+    - tests/integration/test_sessions.py::test_no_storage_unavailable_errors
+    - tests/integration/test_sessions.py::test_concurrent_access_no_wal_errors
+    - tests/chaos/test_database.py::test_multi_process_concurrent_writes
+    acceptance_criteria:
+    - Zero WAL errors under concurrent load test
+    - busy_timeout configured (default 5000ms)
+    - No 'session storage unavailable' errors
+    - Multi-process access works (no SQLITE_BUSY)
+    dependencies:
+    - P6.T3
+    - P21.T12
+    status: pending
+  - id: P21.T7
+    title: Fix clarify empty free-text misreported as timeout (#156171)
+    description: 'Bug: when user submits empty free-text in a clarify prompt,
+
+      Hermes misreports it as timeout (''user did not respond within Nm'').
+
+      Confusing UX — user thinks they answered, system thinks they
+
+      timed out.
+
+      Fix: distinguish empty submission from timeout. Empty submission
+
+      is a valid (if unhelpful) response — prompt again or proceed
+
+      with default. Timeout is no response at all.
+
+      '
+    files_to_create:
+    - hermes/gateway/clarify.py
+    tests_to_write:
+    - tests/unit/gateway/test_clarify.py::test_empty_submission_not_timeout
+    - tests/unit/gateway/test_clarify.py::test_timeout_only_on_no_response
+    - tests/integration/test_clarify.py::test_empty_submission_prompts_again
+    - tests/integration/test_clarify.py::test_timeout_logs_correctly
+    acceptance_criteria:
+    - Empty submission not reported as timeout
+    - Timeout only fires on actual no-response
+    - Empty submission prompts user again (or uses default)
+    - Correct logging for both cases
+    github_issue: https://github.com/NousResearch/hermes-agent/issues/156171
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P21.T8
+    title: Fix gateway shutdown retries after network loss (#156127)
+    description: 'Bug: on macOS host reboot, gateway shutdown notice retries after
+
+      network loss. Shutdown watchdog forces unclean exit.
+
+      Fix: detect network loss during shutdown, abort retries gracefully.
+
+      Clean exit even when network unavailable.
+
+      '
+    files_to_create:
+    - hermes/gateway/shutdown.py
+    tests_to_write:
+    - tests/unit/gateway/test_shutdown.py::test_aborts_on_network_loss
+    - tests/unit/gateway/test_shutdown.py::test_clean_exit_no_network
+    - tests/integration/test_gateway.py::test_reboot_scenario_clean
+    acceptance_criteria:
+    - Network loss during shutdown detected
+    - No retries after network loss
+    - Clean exit even without network
+    github_issue: https://github.com/NousResearch/hermes-agent/issues/156127
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P21.T9
+    title: Fix webapp OOM-killed renderer (#156161)
+    description: 'Bug: webapp renderer build has no heap cap. Update exits 0 (success)
+
+      while the stage is OOM-killed. Bundle stays stale — user thinks
+
+      update succeeded but it didn''t.
+
+      Fix: set Node.js heap cap (--max-old-space-size) for renderer build.
+
+      Detect OOM-kill exit code, fail update explicitly.
+
+      '
+    files_to_create:
+    - scripts/build_webapp.sh
+    - hermes/install/updater.py
+    tests_to_write:
+    - tests/integration/test_updater.py::test_oom_detected_and_reported
+    - tests/integration/test_updater.py::test_no_silent_stale_bundle
+    - tests/integration/test_updater.py::test_heap_cap_set
+    acceptance_criteria:
+    - Heap cap set on renderer build
+    - OOM-kill detected and reported as failure
+    - No silent stale bundle after OOM
+    github_issue: https://github.com/NousResearch/hermes-agent/issues/156161
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P21.T10
+    title: Fix bracketed NO_REPLY marker leaks into gateway delivery (#157239)
+    description: 'Bug: bracketed NO_REPLY marker (internal sentinel) leaks into
+
+      gateway delivery — user sees ''<NO_REPLY>'' or similar in their
+
+      chat client.
+
+      Fix: strip internal sentinels before gateway delivery. Audit all
+
+      internal markers, ensure they''re filtered from user-facing output.
+
+      '
+    files_to_create:
+    - hermes/gateway/delivery.py
+    - hermes/core/streaming.py
+    tests_to_write:
+    - tests/unit/gateway/test_delivery.py::test_no_reply_marker_stripped
+    - tests/unit/gateway/test_delivery.py::test_internal_sentinels_filtered
+    - tests/integration/test_gateway.py::test_user_never_sees_sentinel
+    - tests/property/test_delivery.py::test_no_internal_markers_in_output
+    acceptance_criteria:
+    - Zero internal markers in gateway-delivered messages
+    - All sentinels filtered before delivery
+    - 'Property test: no internal markers in any generated output'
+    github_issue: https://github.com/NousResearch/hermes-agent/issues/157239
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P21.T11
+    title: Fix custom model configurations vanished after update (#25272)
+    description: 'Bug: after v0.13.0 update, all custom model configurations
+
+      vanished. Only 2 models remained available instead of the full
+
+      set. Migration script overwrote user config.
+
+      Fix: migration preserves existing config.yaml. Backup before
+
+      migration. Detect config schema changes, prompt user for merge.
+
+      Note: also covered by Phase 18 (backup & recovery) but apply
+
+      specific fix for config.yaml preservation.
+
+      Check 4: decoupled from P1.T6/P18.T4 — the fix is self-contained
+
+      (install/config code available after Phase 0), so this critical bug
+
+      is fixed FIRST together with P21.T1.
+
+      '
+    files_to_create:
+    - hermes/install/migrations.py
+    files_to_modify:
+    - hermes/config.py
+    tests_to_write:
+    - tests/integration/test_migration.py::test_config_yaml_preserved
+    - tests/integration/test_migration.py::test_backup_before_config_change
+    - tests/integration/test_migration.py::test_user_prompted_on_schema_change
+    - tests/integration/test_migration.py::test_no_config_loss_on_update
+    acceptance_criteria:
+    - Config.yaml preserved across updates
+    - Backup created before any config change
+    - User prompted on schema changes
+    - 'No config loss reproducing issue #25272 scenario'
+    github_issue: https://github.com/NousResearch/hermes-agent/issues/25272
+    dependencies:
+    - P0.T3
+    status: pending
+  - id: P21.T12
+    title: Fix ACP turn keeps running after editor exits (#156173)
+    description: 'Bug: ACP (Agent Client Protocol) — turn keeps running after
+
+      editor''s ACP process exits. Session/load of that session fails
+
+      with bare ''Internal error''.
+
+      Fix: detect ACP process exit, terminate associated turn cleanly.
+
+      Save session state before failure. Better error message.
+
+      '
+    files_to_create:
+    - hermes/acp/server.py
+    - hermes/sessions/store.py
+    tests_to_write:
+    - tests/integration/test_acp.py::test_turn_terminated_on_editor_exit
+    - tests/integration/test_acp.py::test_session_saved_before_failure
+    - tests/integration/test_acp.py::test_no_bare_internal_error
+    - tests/chaos/test_acp.py::test_editor_crash_during_turn
+    acceptance_criteria:
+    - Turn terminated cleanly when editor exits
+    - Session state saved before failure
+    - Descriptive error message (not bare 'Internal error')
+    - Session can be reloaded after editor crash
+    github_issue: https://github.com/NousResearch/hermes-agent/issues/156173
+    dependencies:
+    - P0.T3
+    status: pending
+phase_22:
+  id: phase_22
+  name: Performance optimization
+  goal: 'After all functional phases: latency profiling, token reduction, caching layer, cost tuning.
+    Targets: >=20% latency reduction, >=15% token reduction, cache hit rate >=30%, end-to-end injection
+    within 5s budget.'
+  tasks:
+  - id: P22.T1
+    title: Implement performance profiler
+    description: 'hermes/optimization/performance.py — profile_memory_ops(n_turns=100) -> ProfileReport.
+      Identifies: slowest ops, most expensive ops (tokens), cache miss rates. Scheduling: after all
+      functional phases (plan Section 7); hard dependencies below list only the profiler inputs.'
+    files_to_create:
+    - hermes/optimization/performance.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/benchmark/test_optimization.py::test_profiler_reports_slowest_ops
+    - tests/benchmark/test_optimization.py::test_profiler_reports_token_costs
+    - tests/benchmark/test_optimization.py::test_profiler_reports_cache_miss_rate
+    acceptance_criteria:
+    - ProfileReport covers all memory operations (retrieval, gating, extraction, review)
+    - Top-3 slowest and top-3 most expensive ops identified
+    dependencies:
+    - P4.T4
+    - P11.T1
+    status: pending
+  - id: P22.T2
+    title: Implement MemoryCache
+    description: hermes/memory/cache.py — memoize retrieval results (same query -> same result within
+      TTL); batch multiple memory ops into single API call where possible (e.g., combine extractor+reviewer
+      calls).
+    files_to_create:
+    - hermes/memory/cache.py
+    files_to_modify:
+    - hermes/memory/retrieval.py
+    tests_to_write:
+    - tests/unit/memory/test_cache.py::test_cache_hit_within_ttl
+    - tests/unit/memory/test_cache.py::test_cache_invalidated_on_memory_update
+    - tests/unit/memory/test_cache.py::test_batch_reduces_api_calls
+    acceptance_criteria:
+    - Cache hit rate >=30% for repeated queries
+    - Cache invalidated when underlying memory entries change
+    dependencies:
+    - P22.T1
+    status: pending
+  - id: P22.T3
+    title: Implement prompt optimizer
+    description: hermes/core/prompt_optimizer.py — analyze prompt sizes, suggest reductions, track token
+      usage per operation.
+    files_to_create:
+    - hermes/core/prompt_optimizer.py
+    files_to_modify: []
+    tests_to_write:
+    - tests/unit/core/test_prompt_optimizer.py::test_prompt_size_report
+    - tests/unit/core/test_prompt_optimizer.py::test_token_usage_tracked
+    acceptance_criteria:
+    - Token usage tracked per memory operation
+    - Reduction suggestions generated for oversized prompts
+    dependencies:
+    - P22.T1
+    status: pending
+  - id: P22.T4
+    title: Re-profile and document performance characteristics
+    description: Re-run profiler after optimizations, verify improvement targets met, document performance
+      characteristics in docs/performance.md.
+    files_to_create:
+    - docs/performance.md
+    files_to_modify: []
+    tests_to_write:
+    - tests/benchmark/test_optimization.py::test_latency_improved_after_optimization
+    - tests/benchmark/test_optimization.py::test_token_usage_reduced
+    - tests/benchmark/test_optimization.py::test_cache_hit_rate_above_30_percent
+    - tests/integration/test_performance.py::test_end_to_end_latency_within_budget
+    acceptance_criteria:
+    - Memory ops latency reduced by >=20% vs pre-optimization baseline
+    - Token usage reduced by >=15%
+    - End-to-end injection latency within 5s budget
+    - Performance characteristics documented
+    dependencies:
+    - P22.T2
+    - P22.T3
+    status: pending

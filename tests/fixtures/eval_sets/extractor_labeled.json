@@ -1,0 +1,478 @@
+{
+  "_meta": {
+    "component": "extractor",
+    "version": "1.0.0",
+    "created_at": "2026-11-20",
+    "description": "P10.T2 eval set: conversation turns labeled with the draft facts the extractor should propose. expected_output lists short, normalized third-person fact statements (empty list when the turn carries no durable fact). Domains: preferences, people, work, health, schedule, travel, tech, finance, learning, home, pets, corrections, and no-fact small talk."
+  },
+  "examples": [
+    {
+      "id": "ext-001",
+      "input": "I switched my coffee to oat milk last month, the almond one was upsetting my stomach.",
+      "expected_output": [
+        "User prefers oat milk in coffee",
+        "User stopped drinking almond milk because it upset their stomach"
+      ],
+      "context": "casual chat; corrects an older stored preference"
+    },
+    {
+      "id": "ext-002",
+      "input": "Note for later: my sister Priya's birthday is March 14, don't let me forget it again.",
+      "expected_output": [
+        "User's sister is named Priya",
+        "Priya's birthday is March 14"
+      ],
+      "context": "user asks to remember a family fact"
+    },
+    {
+      "id": "ext-003",
+      "input": "Can you draft the standup notes? I lead the payments team standup on Tuesdays and Thursdays.",
+      "expected_output": [
+        "User leads the payments team",
+        "Payments standup runs on Tuesdays and Thursdays"
+      ],
+      "context": "work scheduling context"
+    },
+    {
+      "id": "ext-004",
+      "input": "Another migraine today. The neurologist switched me to propranolol for prevention.",
+      "expected_output": [
+        "User takes propranolol for migraine prevention",
+        "User sees a neurologist about migraines"
+      ],
+      "context": "health mention; medication change worth persisting"
+    },
+    {
+      "id": "ext-005",
+      "input": "Hey, are you still there?",
+      "expected_output": [],
+      "context": "small talk; no durable fact"
+    },
+    {
+      "id": "ext-006",
+      "input": "Book the usual table at Tsukiji Sushi for Friday 8pm, it's our anniversary dinner.",
+      "expected_output": [
+        "User has an anniversary dinner at Tsukiji Sushi on Friday at 8pm"
+      ],
+      "context": "one-off event with a location worth remembering"
+    },
+    {
+      "id": "ext-007",
+      "input": "I've decided to drop Spanish and focus on Japanese instead this year.",
+      "expected_output": [
+        "User is learning Japanese in 2026",
+        "User stopped learning Spanish"
+      ],
+      "context": "learning goals; replaces an older goal"
+    },
+    {
+      "id": "ext-008",
+      "input": "My work laptop is the ThinkPad X1 Carbon, but I do all my side projects on the desktop.",
+      "expected_output": [
+        "User's work laptop is a ThinkPad X1 Carbon",
+        "User uses a desktop machine for side projects"
+      ],
+      "context": "hardware inventory facts"
+    },
+    {
+      "id": "ext-009",
+      "input": "Please always send me a summary bullet list, never long paragraphs.",
+      "expected_output": [
+        "User prefers summary bullet lists over long paragraphs"
+      ],
+      "context": "explicit communication preference"
+    },
+    {
+      "id": "ext-010",
+      "input": "The mortgage refinance closes on December 5th with Halcyon Credit Union.",
+      "expected_output": [
+        "User's mortgage refinance closes on December 5",
+        "User's mortgage lender is Halcyon Credit Union"
+      ],
+      "context": "finance event with a date and institution"
+    },
+    {
+      "id": "ext-011",
+      "input": "What's the weather like in Berlin this weekend?",
+      "expected_output": [],
+      "context": "transient lookup question; nothing durable"
+    },
+    {
+      "id": "ext-012",
+      "input": "Max the corgi gets his rabies booster on the 3rd of next month at Verde Animal Clinic.",
+      "expected_output": [
+        "User has a corgi named Max",
+        "Max's rabies booster is due on the 3rd of next month at Verde Animal Clinic"
+      ],
+      "context": "pet care with a deadline"
+    },
+    {
+      "id": "ext-013",
+      "input": "I'm on a low-sodium diet now per the cardiologist, so skip recipes with soy sauce.",
+      "expected_output": [
+        "User follows a low-sodium diet",
+        "User was advised by a cardiologist",
+        "User wants recipes without soy sauce"
+      ],
+      "context": "health-driven dietary restriction"
+    },
+    {
+      "id": "ext-014",
+      "input": "Tell Dana I'll be 15 minutes late to the 3pm sync.",
+      "expected_output": [
+        "User has a 3pm sync meeting with Dana"
+      ],
+      "context": "logistics message; only the standing fact is durable"
+    },
+    {
+      "id": "ext-015",
+      "input": "We finally picked the name Ada for the baby girl due in April.",
+      "expected_output": [
+        "User's daughter is due in April",
+        "User plans to name their daughter Ada"
+      ],
+      "context": "family news with a durable plan"
+    },
+    {
+      "id": "ext-016",
+      "input": "Our sprint review moved to Wednesdays, and it's in the Orion room now.",
+      "expected_output": [
+        "User's sprint review is on Wednesdays",
+        "User's sprint review takes place in the Orion room"
+      ],
+      "context": "recurring meeting change"
+    },
+    {
+      "id": "ext-017",
+      "input": "Never book anything with Delta again, they lost my skis twice.",
+      "expected_output": [
+        "User refuses to fly Delta",
+        "Delta lost the user's skis twice"
+      ],
+      "context": "strong preference with a reason"
+    },
+    {
+      "id": "ext-018",
+      "input": "The garage door code is 4821 and the spare key is under the blue pot.",
+      "expected_output": [
+        "Garage door code is 4821",
+        "Spare key is under the blue pot"
+      ],
+      "context": "household secrets the user wants stored (PII-sensitive)"
+    },
+    {
+      "id": "ext-019",
+      "input": "I ran my first half marathon in 2:04 and want to break two hours next spring.",
+      "expected_output": [
+        "User ran a half marathon in 2:04",
+        "User aims to run a half marathon under 2 hours next spring"
+      ],
+      "context": "fitness achievement and goal"
+    },
+    {
+      "id": "ext-020",
+      "input": "Could you reformat this email for me?",
+      "expected_output": [],
+      "context": "task request with no self-fact"
+    },
+    {
+      "id": "ext-021",
+      "input": "My manager Elena approved the budget for the vector search migration.",
+      "expected_output": [
+        "User's manager is named Elena",
+        "Elena approved the budget for the vector search migration"
+      ],
+      "context": "workplace structure plus project milestone"
+    },
+    {
+      "id": "ext-022",
+      "input": "I'm allergic to penicillin, amoxicillin too. List it on any medical form.",
+      "expected_output": [
+        "User is allergic to penicillin",
+        "User is allergic to amoxicillin"
+      ],
+      "context": "critical allergy facts"
+    },
+    {
+      "id": "ext-023",
+      "input": "The trip to Lisbon is booked: TAP flight out May 3rd, back May 10th.",
+      "expected_output": [
+        "User travels to Lisbon arriving May 3",
+        "User returns from Lisbon on May 10"
+      ],
+      "context": "travel dates worth persisting for reminders"
+    },
+    {
+      "id": "ext-024",
+      "input": "From now on call me Alex, not Alexandra. Only my grandmother uses that.",
+      "expected_output": [
+        "User prefers the name Alex",
+        "User's formal name is Alexandra"
+      ],
+      "context": "explicit correction of how to address the user"
+    },
+    {
+      "id": "ext-025",
+      "input": "I pay myself 400 euros a month into the vacation fund automatically.",
+      "expected_output": [
+        "User auto-transfers 400 EUR monthly into a vacation fund"
+      ],
+      "context": "recurring finance habit"
+    },
+    {
+      "id": "ext-026",
+      "input": "Do you remember what I told you about the Henderson project?",
+      "expected_output": [],
+      "context": "meta question about memory; no new fact"
+    },
+    {
+      "id": "ext-027",
+      "input": "Our flat's washing machine is a Bosch Series 6, installed March this year.",
+      "expected_output": [
+        "User's washing machine is a Bosch Series 6",
+        "Washing machine was installed in March 2026"
+      ],
+      "context": "appliance inventory with a date"
+    },
+    {
+      "id": "ext-028",
+      "input": "I quit vaping on October 1st, please help me stick to it.",
+      "expected_output": [
+        "User quit vaping on October 1",
+        "User wants support staying off vaping"
+      ],
+      "context": "habit change with a milestone date"
+    },
+    {
+      "id": "ext-029",
+      "input": "Standalone note: the wifi password in the cabin is sled-dog-42.",
+      "expected_output": [
+        "Cabin wifi password is sled-dog-42"
+      ],
+      "context": "explicit ask-to-remember credential"
+    },
+    {
+      "id": "ext-030",
+      "input": "I prefer the window seat, aisle only on flights over six hours.",
+      "expected_output": [
+        "User prefers window seats",
+        "User prefers aisle seats on flights longer than six hours"
+      ],
+      "context": "nuanced travel preference"
+    },
+    {
+      "id": "ext-031",
+      "input": "My blood type is O negative, good to know for emergencies.",
+      "expected_output": [
+        "User's blood type is O negative"
+      ],
+      "context": "medical identity fact"
+    },
+    {
+      "id": "ext-032",
+      "input": "The landlord, Mr. Whitfield, raised the rent to 1450 starting January.",
+      "expected_output": [
+        "User's landlord is Mr. Whitfield",
+        "User's rent is 1450 per month starting January"
+      ],
+      "context": "housing facts with an effective date"
+    },
+    {
+      "id": "ext-033",
+      "input": "I've moved my blog from WordPress to Astro, the old one is archived.",
+      "expected_output": [
+        "User's blog runs on Astro",
+        "User's previous blog used WordPress and is archived"
+      ],
+      "context": "tech stack change"
+    },
+    {
+      "id": "ext-034",
+      "input": "Thursdays are for physio at 7am, so never schedule early calls then.",
+      "expected_output": [
+        "User has physiotherapy at 7am on Thursdays",
+        "User does not want early calls on Thursdays"
+      ],
+      "context": "recurring commitment plus scheduling preference"
+    },
+    {
+      "id": "ext-035",
+      "input": "Actually I hate cilantro, it tastes like soap. Remove it from every recipe.",
+      "expected_output": [
+        "User dislikes cilantro",
+        "User wants cilantro excluded from recipes"
+      ],
+      "context": "food aversion with an action request"
+    },
+    {
+      "id": "ext-036",
+      "input": "My daughter Mia started piano lessons with Mr. Rossi on Saturdays.",
+      "expected_output": [
+        "User has a daughter named Mia",
+        "Mia takes piano lessons with Mr. Rossi on Saturdays"
+      ],
+      "context": "family activity schedule"
+    },
+    {
+      "id": "ext-037",
+      "input": "The client deadline is November 30th, hard stop, no extensions granted.",
+      "expected_output": [
+        "User's client deadline is November 30",
+        "No extensions are possible for the client deadline"
+      ],
+      "context": "work deadline with emphasis on rigidity"
+    },
+    {
+      "id": "ext-038",
+      "input": "I sold the Honda and bought an ID.4 last week, fully electric now.",
+      "expected_output": [
+        "User sold their Honda",
+        "User drives a Volkswagen ID.4",
+        "User's car is fully electric"
+      ],
+      "context": "vehicle change with multiple derived facts"
+    },
+    {
+      "id": "ext-039",
+      "input": "Add that I volunteer at the food bank every second Saturday.",
+      "expected_output": [
+        "User volunteers at the food bank every second Saturday"
+      ],
+      "context": "explicit add-to-memory request"
+    },
+    {
+      "id": "ext-040",
+      "input": "Hmm, what was I saying? Never mind, forget it.",
+      "expected_output": [],
+      "context": "retracted utterance; nothing to store"
+    },
+    {
+      "id": "ext-041",
+      "input": "My timezone is CET but I keep my calendar in UTC to avoid confusion.",
+      "expected_output": [
+        "User lives in the CET timezone",
+        "User keeps their calendar in UTC"
+      ],
+      "context": "locale and tooling convention"
+    },
+    {
+      "id": "ext-042",
+      "input": "The outage postmortem is done; root cause was the expired TLS cert on edge-2.",
+      "expected_output": [
+        "The outage root cause was an expired TLS certificate on edge-2",
+        "User completed the outage postmortem"
+      ],
+      "context": "incident detail worth persisting for ops memory"
+    },
+    {
+      "id": "ext-043",
+      "input": "I usually meditate ten minutes after breakfast, roughly 8:30am.",
+      "expected_output": [
+        "User meditates for ten minutes after breakfast",
+        "User's breakfast time is around 8:30am"
+      ],
+      "context": "daily routine with implied schedule"
+    },
+    {
+      "id": "ext-044",
+      "input": "Our anniversary trip destination is sealed, don't tell Sam, she thinks it's Kyoto.",
+      "expected_output": [
+        "The real anniversary trip destination is a secret from Sam",
+        "Sam believes the anniversary trip is to Kyoto"
+      ],
+      "context": "secret-keeping instruction with a cover story"
+    },
+    {
+      "id": "ext-045",
+      "input": "I got promoted to senior engineer last week, effective the first of December.",
+      "expected_output": [
+        "User was promoted to senior engineer",
+        "The promotion is effective December 1"
+      ],
+      "context": "career milestone"
+    },
+    {
+      "id": "ext-046",
+      "input": "Nothing lasts: the bakery on Ninth Street closed down for good.",
+      "expected_output": [
+        "The bakery on Ninth Street has closed permanently"
+      ],
+      "context": "world fact that invalidates a stored recommendation"
+    },
+    {
+      "id": "ext-047",
+      "input": "Both kids are at Riverside Elementary now, pickup is 3:15pm.",
+      "expected_output": [
+        "User's children attend Riverside Elementary",
+        "School pickup time is 3:15pm"
+      ],
+      "context": "school logistics"
+    },
+    {
+      "id": "ext-048",
+      "input": "I'm team Claude for coding help, Gemini for trip planning.",
+      "expected_output": [
+        "User prefers Claude for coding help",
+        "User prefers Gemini for trip planning"
+      ],
+      "context": "tool routing preference"
+    },
+    {
+      "id": "ext-049",
+      "input": "The contract renewal with Northwind auto-renews unless cancelled by January 15.",
+      "expected_output": [
+        "The Northwind contract auto-renews",
+        "Northwind contract must be cancelled by January 15 to stop renewal"
+      ],
+      "context": "contractual deadline fact"
+    },
+    {
+      "id": "ext-050",
+      "input": "Send the invoice reminder to accounting@fernworks.io on the first of each month.",
+      "expected_output": [
+        "Invoice reminders go to accounting@fernworks.io monthly on the first"
+      ],
+      "context": "recurring task with an address"
+    },
+    {
+      "id": "ext-051",
+      "input": "I finally watched the season finale last night, what an ending!",
+      "expected_output": [],
+      "context": "spoiler-safe chatter; the watched-episode state is too transient"
+    },
+    {
+      "id": "ext-052",
+      "input": "My passport expires June 2027, remind me to renew six months before.",
+      "expected_output": [
+        "User's passport expires June 2027",
+        "User wants a renewal reminder around December 2026"
+      ],
+      "context": "document expiry with derived reminder date"
+    },
+    {
+      "id": "ext-053",
+      "input": "Grandpa's shed combination is still 1973, same as always.",
+      "expected_output": [
+        "Grandpa's shed lock combination is 1973"
+      ],
+      "context": "family fact confirmed unchanged"
+    },
+    {
+      "id": "ext-054",
+      "input": "For the launch we chose the blue logo, the amber one lost the vote 4-2.",
+      "expected_output": [
+        "The launch logo is blue",
+        "The amber logo lost the team vote 4 to 2"
+      ],
+      "context": "team decision with a recorded outcome"
+    },
+    {
+      "id": "ext-055",
+      "input": "I keep forgetting: my bank's fraud line is 0800-555-0199, save that.",
+      "expected_output": [
+        "User's bank fraud hotline is 0800-555-0199"
+      ],
+      "context": "explicit save-this request with a number"
+    }
+  ]
+}
