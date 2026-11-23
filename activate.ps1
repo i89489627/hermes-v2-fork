@@ -1,4 +1,4 @@
-# Source this file to sync and apply the PM environment; deactivate restores it.
+﻿# Source this file to sync and apply the PM environment; deactivate restores it.
 # Trusts the recorded tool digest. `hermes pm install` re-checks the bytes.
 # -TestExtras a,b selects runtime extras in the test environment (default: [all]).
 param([string]$TestExtras = '')
@@ -121,7 +121,7 @@ function global:hermes {
             }
         }
         if (-not $py) { $py = 'python' }
-        & $py hermes @args
+        & $py hermes_cli/main.py @args
     } finally {
         Pop-Location
     }

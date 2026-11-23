@@ -108,15 +108,15 @@ hermes() {
     (
         cd "$__HERMES_WORKTREE" || exit 1
         if [ -n "${PYTHON-}" ]; then
-            exec "$PYTHON" hermes "$@"
+            exec "$PYTHON" hermes_cli/main.py "$@"
         elif [ -x .venv/Scripts/python.exe ]; then
-            exec .venv/Scripts/python.exe hermes "$@"
+            exec .venv/Scripts/python.exe hermes_cli/main.py "$@"
         elif [ -x .venv/bin/python ]; then
-            exec .venv/bin/python hermes "$@"
+            exec .venv/bin/python hermes_cli/main.py "$@"
         elif [ -x venv/Scripts/python.exe ]; then
-            exec venv/Scripts/python.exe hermes "$@"
+            exec venv/Scripts/python.exe hermes_cli/main.py "$@"
         elif [ -x venv/bin/python ]; then
-            exec venv/bin/python hermes "$@"
+            exec venv/bin/python hermes_cli/main.py "$@"
         else
             exec python hermes "$@"
         fi

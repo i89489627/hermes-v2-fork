@@ -81,6 +81,31 @@ Fork-specific fixes beyond upstream: `hermes_home()` resolution on Windows
 self-healing, and a test-home I/O guard so the test suite can never read or write the
 real Hermes home.
 
+## Install from scratch
+
+Windows (PowerShell), Linux/macOS (bash):
+
+```bash
+git clone https://github.com/i89489627/hermes-v2-fork.git
+cd hermes-v2-fork
+. ./activate            # PowerShell: . .\activate.ps1
+hermes --version
+```
+
+`activate` bootstraps everything via Hermes' `pm` runtime: a pinned Python, tools
+(uv, node, pnpm, ffmpeg, ripgrep, chromium, cua-driver) and all dependencies from
+`uv.lock`, hash-verified, into an isolated Hermes home (default
+`%LOCALAPPDATA%\hermes` on Windows, `~/.hermes` elsewhere; override with
+`HERMES_HOME`). First run downloads a few hundred MB.
+
+Notes:
+- `pip install` is intentionally refused by upstream's `setup.py` — Hermes is not
+  distributed as a wheel. Use the activate flow above (dev-install), matching how
+  this fork is actually run.
+- The fork's `hermes/` package occupies the repo path of upstream's root `hermes`
+  launcher script, so `activate` invokes `hermes_cli/main.py` directly — the same
+  entry point the installed gateway uses.
+
 ## Test status
 
 - Fork v2 suites (unit + property + chaos): **263 passed** on the synced tree.
